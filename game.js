@@ -3,7 +3,7 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.04";
+  const APP_VERSION = "2.05";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
@@ -110,6 +110,7 @@
   const toggleSfx = document.getElementById("toggle-sfx");
   const toggleFireworks = document.getElementById("toggle-fireworks");
   const charBtnStar = document.getElementById("char-btn-star");
+  const brandTwo = document.getElementById("brand-two");
 
   let state = "title";
   let debugMode = false;
@@ -851,25 +852,14 @@
     startDash(otherSide(player.side));
   }
 
-  function canvasCoords(e) {
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: ((e.clientX - rect.left) / rect.width) * W,
-      y: ((e.clientY - rect.top) / rect.height) * H,
-    };
-  }
-
-  function hitTitlePeach(x, y) {
-    const dx = x - player.x;
-    const dy = y - player.y;
-    return dx * dx + dy * dy <= (player.r * 1.8) * (player.r * 1.8);
-  }
-
-  function handleTitlePeachTap() {
-    if (isNameRegisterOpen()) return;
+  function handleDebugTitleTap() {
+    if (state !== "title" || isNameRegisterOpen()) return;
     debugTapCount += 1;
-    player.squish = 1.3;
-    spawnBurst(player.x, player.y, "#ff8fab", 5);
+    if (brandTwo) {
+      brandTwo.classList.remove("brand-two-pop");
+      void brandTwo.offsetWidth;
+      brandTwo.classList.add("brand-two-pop");
+    }
     if (debugTapCount >= DEBUG_TAPS_NEEDED) requestStartGame(true);
   }
 
@@ -2094,13 +2084,7 @@
   function onPointer(e) {
     if (isInteractiveTarget(e.target)) return;
     e.preventDefault();
-    if (state === "title") {
-      const rect = canvas.getBoundingClientRect();
-      if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
-      const pos = canvasCoords(e);
-      if (hitTitlePeach(pos.x, pos.y)) handleTitlePeachTap();
-      return;
-    }
+    if (state === "title") return;
     if (state === "playing") tryAction();
   }
 
@@ -2114,6 +2098,14 @@
       tryAction();
     }
   });
+
+  if (brandTwo) {
+    brandTwo.addEventListener("pointerdown", function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      handleDebugTitleTap();
+    });
+  }
 
   btnStart.addEventListener("click", function (e) {
     e.stopPropagation();

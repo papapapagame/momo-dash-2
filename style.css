@@ -259,15 +259,32 @@ body {
   color: var(--peach-deep);
   text-shadow: 0 2px 0 rgba(255, 255, 255, 0.7);
   line-height: 1.1;
-  margin-bottom: 2px;
+  margin-bottom: 10px;
 }
 
-.subtitle {
-  font-size: 0.82rem;
-  font-weight: 800;
-  letter-spacing: 0.28em;
-  color: #7a5ab0;
-  margin-bottom: 10px;
+.brand-two {
+  display: inline-block;
+  padding: 0 0.12em;
+  margin: 0 -0.04em;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transform-origin: center;
+}
+
+.brand-two:active {
+  transform: scale(1.14);
+}
+
+.brand-two.brand-two-pop {
+  animation: brand-two-pop 0.18s ease-out;
+}
+
+@keyframes brand-two-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.18); }
+  100% { transform: scale(1); }
 }
 
 .user-row {
