@@ -3,7 +3,7 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.08";
+  const APP_VERSION = "2.09";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
@@ -26,10 +26,16 @@
   const CHAR_KEY = "momoDash2Char";
   const USER_KEY = "momoDash2UserName";
   const STAR_UNLOCK_KEY = "momoDash2StarUnlock";
-
+  const BGM_VOLUME = 0.45;
+  const BGM_TRACKS = [
+    { file: "sounds/peach-funky-run.mp3", label: "PEACH FUNKY RUN" },
+    { file: "sounds/peach-overdrive.mp3", label: "PEACH OVERDRIVE" },
+    { file: "sounds/momo-dash.mp3", label: "ももダッシュ！" },
+    { file: "sounds/momo-panic.mp3", label: "もももも☆ぱにっく！" },
+  ];
   const CHAR_IDS = ["night", "comet", "meteor", "luna", "star"];
   const MODE_IDS = ["easy", "normal", "hard"];
-  const BGM_MODE_VALUES = ["moonlight", "nightdash", "sequence", "off"];
+  const BGM_MODE_VALUES = ["0", "1", "2", "3", "sequence", "random", "off"];
   const CHARACTERS = {
     night: {
       id: "night",
@@ -160,10 +166,9 @@
   let windows = [];
 
   let audioCtx = null;
-  let bgmTimer = null;
+  let bgm = null;
   let bgmTrackIndex = 0;
-  let bgmPlaying = false;
-  let bgmStep = 0;
+  let bgmEndedBound = false;
 
   const player = {
     side: "left",
@@ -242,7 +247,9 @@
 
   function loadBgmMode() {
     const id = localStorage.getItem(BGM_MODE_KEY);
-    return BGM_MODE_VALUES.indexOf(id) >= 0 ? id : "moonlight";
+    if (id === "moonlight") return "0";
+    if (id === "nightdash") return "1";
+    return BGM_MODE_VALUES.indexOf(id) >= 0 ? id : "0";
   }
 
   function loadUserName() {
@@ -579,49 +586,119 @@
     playTone(784, 0.2, "sine", 0.12, 1175);
   }
 
-  const BGM_PATTERNS = {
-    moonlight: [392, 494, 587, 659, 587, 494, 392, 330, 349, 440, 523, 587, 523, 440, 349, 294],
-    nightdash: [330, 392, 494, 392, 523, 392, 494, 330, 294, 349, 440, 349, 494, 349, 440, 294],
-  };
-
-  function currentBgmTrack() {
-    if (bgmMode === "nightdash") return "nightdash";
-    if (bgmMode === "sequence") return bgmTrackIndex % 2 === 0 ? "moonlight" : "nightdash";
-    return "moonlight";
+  function resolveAssetUrl(relativePath) {
+    let base = document.baseURI || window.location.href;
+    const scripts = document.getElementsByTagName("script");
+    for (let i = scripts.length - 1; i >= 0; i--) {
+      const raw = scripts[i].getAttribute("src");
+      if (!raw) continue;
+      if (!/(^|\/)game\.js(\?|#|$)/i.test(raw)) continue;
+      const scriptUrl = new URL(raw, document.baseURI || window.location.href);
+      base = scriptUrl.href.replace(/game\.js([?#].*)?$/i, "");
+      break;
+    }
+    return new URL(relativePath, base).href;
   }
 
-  function stopBgm() {
-    bgmPlaying = false;
-    if (bgmTimer) {
-      clearInterval(bgmTimer);
-      bgmTimer = null;
+  function ensureBgm() {
+    if (bgm) return bgm;
+    bgm = new Audio();
+    bgm.preload = "auto";
+    bgm.volume = BGM_VOLUME;
+    bgm.setAttribute("playsinline", "true");
+    bgm.playsInline = true;
+    if (!bgmEndedBound) {
+      bgmEndedBound = true;
+      bgm.addEventListener("ended", function () {
+        if (state !== "playing" || bgmMode !== "sequence") return;
+        bgmTrackIndex = (bgmTrackIndex + 1) % BGM_TRACKS.length;
+        loadBgmTrack(bgmTrackIndex, true);
+        startBgmPlayback(true);
+      });
+    }
+    return bgm;
+  }
+
+  function loadBgmTrack(index, shouldLoad) {
+    const track = BGM_TRACKS[index];
+    if (!track) return;
+    const audio = ensureBgm();
+    const url = resolveAssetUrl(track.file);
+    audio.loop = bgmMode !== "sequence";
+    if (audio.src !== url) {
+      audio.src = url;
+      if (shouldLoad !== false) audio.load();
     }
   }
 
-  function playBgm(restart) {
+  function pickTrackIndexForMode() {
+    if (bgmMode === "off") return -1;
+    if (bgmMode === "sequence") return 0;
+    if (bgmMode === "random") return (Math.random() * BGM_TRACKS.length) | 0;
+    const n = Number(bgmMode);
+    if (n >= 0 && n < BGM_TRACKS.length) return n;
+    return 0;
+  }
+
+  function startBgmPlayback(fromStart) {
+    const audio = ensureBgm();
+    audio.volume = BGM_VOLUME;
+    if (fromStart) {
+      try {
+        audio.currentTime = 0;
+      } catch (err) {}
+    }
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.then === "function") {
+      playPromise.catch(function () {
+        const retry = function () {
+          audio.removeEventListener("canplay", retry);
+          if (state !== "playing" || bgmMode === "off") return;
+          audio.play().catch(function () {});
+        };
+        audio.addEventListener("canplay", retry);
+      });
+    }
+  }
+
+  function playBgm(fromStart) {
     if (bgmMode === "off") {
       stopBgm();
       return;
     }
-    resumeAudio();
-    if (!audioCtx) return;
-    if (restart) {
-      bgmStep = 0;
-      if (bgmMode !== "sequence") bgmTrackIndex = bgmMode === "nightdash" ? 1 : 0;
+    if (fromStart || bgmTrackIndex < 0) {
+      bgmTrackIndex = pickTrackIndexForMode();
     }
-    stopBgm();
-    bgmPlaying = true;
-    bgmTimer = setInterval(function () {
-      if (!bgmPlaying || !audioCtx || state !== "playing") return;
-      const notes = BGM_PATTERNS[currentBgmTrack()];
-      const freq = notes[bgmStep % notes.length];
-      playTone(freq, 0.18, bgmStep % 4 === 0 ? "triangle" : "sine", 0.045);
-      if (bgmStep % 2 === 0) playTone(freq / 2, 0.2, "sine", 0.03);
-      bgmStep += 1;
-      if (bgmMode === "sequence" && bgmStep % notes.length === 0 && bgmStep > 0) {
-        bgmTrackIndex = (bgmTrackIndex + 1) % 2;
+    if (bgmTrackIndex < 0) {
+      stopBgm();
+      return;
+    }
+    loadBgmTrack(bgmTrackIndex, true);
+    startBgmPlayback(!!fromStart);
+  }
+
+  function stopBgm() {
+    if (!bgm) return;
+    bgm.pause();
+    try {
+      bgm.currentTime = 0;
+    } catch (err) {}
+  }
+
+  function setBgmMode(mode) {
+    if (BGM_MODE_VALUES.indexOf(mode) === -1) mode = "0";
+    bgmMode = mode;
+    localStorage.setItem(BGM_MODE_KEY, bgmMode);
+    if (bgmModeSelect) bgmModeSelect.value = bgmMode;
+    if (state === "playing") {
+      if (bgmMode === "off") stopBgm();
+      else {
+        resumeAudio();
+        playBgm(true);
       }
-    }, 220);
+    } else {
+      stopBgm();
+    }
   }
 
   function wallX(side) {
@@ -2214,9 +2291,7 @@
     if (!fireworksEnabled) fireworks = [];
   });
   bgmModeSelect.addEventListener("change", function () {
-    bgmMode = bgmModeSelect.value;
-    localStorage.setItem(BGM_MODE_KEY, bgmMode);
-    if (state === "playing") playBgm(true);
+    setBgmMode(bgmModeSelect.value);
   });
   toggleSfx.addEventListener("click", function (e) { e.stopPropagation(); });
   toggleFireworks.addEventListener("click", function (e) { e.stopPropagation(); });
