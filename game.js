@@ -3,12 +3,12 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.05";
+  const APP_VERSION = "2.07";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
   const DASH_DUR = 0.26;
-  const LUNA_DASH_DUR = 0.34;
+  const LUNA_DASH_DUR = 0.68;
   const PEACH_SCORE = 100;
   const FEATHER_BONUS = 150;
   const SMASH_SCORE = 100;
@@ -33,8 +33,8 @@
   const CHARACTERS = {
     night: {
       id: "night",
-      name: "ナイト桃",
-      desc: "夜のもも。1度だけ障害物への接触を我慢できる。距離スコアが少し多め。羽を取ると引き返しを1回ストック（最大2）。",
+      name: "ノーマル桃",
+      desc: "1度だけ障害物への接触を我慢できる。距離スコアが少し多め。羽を取るとジャンプ中に引き返しを1回ストック（最大2）。",
       distMult: 1.2,
       moonGain: 1,
       canReverse: false,
@@ -42,7 +42,7 @@
     comet: {
       id: "comet",
       name: "コメット桃",
-      desc: "ダッシュ中に通路のカラスや蝙蝠、月のかけらを彗星のように吹き飛ばしてスコアにする！羽を取ると引き返しを1回ストック（最大2）。",
+      desc: "ジャンプ中に通路のカラスや蝙蝠、月のかけらを彗星のように吹き飛ばしてスコアにする！羽を取ると引き返しを1回ストック（最大2）。",
       distMult: 0.85,
       moonGain: 1,
       canReverse: false,
@@ -50,7 +50,7 @@
     meteor: {
       id: "meteor",
       name: "メテオ桃",
-      desc: "着壁の衝撃で、その壁の近くのトゲを破壊してスコアにする！羽があると破壊範囲が広がるぞ。",
+      desc: "着壁の衝撃で、その壁の近くのトゲを破壊してスコアにする！羽を取ると引き返しを1回ストック（最大2）。",
       distMult: 0.85,
       moonGain: 1,
       canReverse: false,
@@ -58,7 +58,7 @@
     luna: {
       id: "luna",
       name: "ルナ桃",
-      desc: "ダッシュがゆっくりで、途中でもう1回タップすると反対の壁へ引き返せる。スコアの伸びは遅め。",
+      desc: "ジャンプがとてもゆっくりで、ジャンプ中は何度でもタップで切り返せる。羽を取るとレーザーを1度無効化できる。スコアの伸びは遅め。",
       distMult: 0.65,
       moonGain: 1.2,
       canReverse: true,
@@ -66,7 +66,7 @@
     star: {
       id: "star",
       name: "スター桃",
-      desc: "夜空の隠しもも。ダッシュ中に1回引き返せて、ムーンゲージが貯まりやすい。羽で引き返しをストック（最大2）。スタート時にムーンダッシュ持ち！",
+      desc: "夜空の隠しもも。ジャンプ中に1回引き返せて、ムーンゲージが貯まりやすい。羽で引き返しをストック（最大2）。スタート時にムーンジャンプ持ち！",
       distMult: 1.15,
       moonGain: 1.6,
       canReverse: true,
@@ -180,6 +180,9 @@
     shield: 0,
     feather: false,
     reverses: 0,
+    peachStreak: 0,
+    peachGuard: 0,
+    laserGuard: 0,
     invuln: 0,
     spinAngle: 0,
   };
@@ -400,20 +403,15 @@
 
   function syncStatusHud() {
     const label = statusHud && statusHud.querySelector(".status-label");
-    if (player.reverses > 0) {
-      if (label) label.textContent = "引き返し×" + player.reverses;
-      statusHud.classList.toggle("hidden", false);
-    } else if (selectedCharId === "meteor") {
-      if (label) label.textContent = player.feather ? "壁破壊+" : "着壁破壊";
-      statusHud.classList.toggle("hidden", false);
-    } else if (selectedCharId === "night") {
-      if (label) label.textContent = "ガード";
-      statusHud.classList.toggle("hidden", player.shield <= 0);
-    } else {
-      if (label) label.textContent = "引き返し×0";
-      statusHud.classList.toggle("hidden", true);
-    }
-    if (state !== "playing") statusHud.classList.add("hidden");
+    const parts = [];
+    if (selectedCharId !== "luna" && player.reverses > 0) parts.push("引き返し×" + player.reverses);
+    if (player.laserGuard > 0) parts.push("レーザー無効×" + player.laserGuard);
+    if (player.shield > 0) parts.push("ガード");
+    if (player.peachGuard > 0) parts.push("無敵×" + player.peachGuard);
+    if (selectedCharId === "meteor") parts.push("着壁破壊");
+    if (label) label.textContent = parts.join(" ");
+    if (statusHud) statusHud.classList.toggle("hidden", parts.length === 0 || state !== "playing");
+    if (state !== "playing" && statusHud) statusHud.classList.add("hidden");
   }
 
   function setScore(value) {
@@ -454,7 +452,7 @@
     syncMoonHud();
     sfxMoon();
     spawnBurst(player.x, player.y, "#ffe08a", 22);
-    spawnFloatText(player.x, player.y - 36, "ムーンダッシュ！", "#ffd24a");
+    spawnFloatText(player.x, player.y - 36, "ムーンジャンプ！", "#ffd24a");
   }
 
   function skyPhase() {
@@ -639,9 +637,8 @@
   }
 
   function resetReverses() {
-    if (selectedCharId === "luna") {
-      player.reverses = player.feather ? 2 : 1;
-    } else if (selectedCharId === "star") {
+    if (selectedCharId === "luna") return;
+    if (selectedCharId === "star") {
       player.reverses = Math.min(2, Math.max(player.reverses, 1));
     }
   }
@@ -682,6 +679,10 @@
     player.blink = 0;
     player.shield = selectedCharId === "night" ? 1 : 0;
     player.feather = false;
+    player.reverses = 0;
+    player.peachStreak = 0;
+    player.peachGuard = 0;
+    player.laserGuard = 0;
     player.invuln = 0;
     player.spinAngle = 0;
     resetReverses();
@@ -809,8 +810,10 @@
   }
 
   function reverseDash() {
-    if (player.reverses <= 0) return;
-    player.reverses -= 1;
+    if (selectedCharId !== "luna") {
+      if (player.reverses <= 0) return;
+      player.reverses -= 1;
+    }
     player.fromX = player.x;
     player.targetSide = otherSide(player.targetSide);
     player.toX = wallX(player.targetSide);
@@ -1034,12 +1037,20 @@
       spawnBurst(item.x, item.y, "#ff8fab", 12);
       spawnFloatText(item.x, item.y - 20, "+" + gained, "#e85a7a");
       addMoon(10);
+      player.peachStreak += 1;
+      if (player.peachStreak >= 5) {
+        player.peachStreak = 0;
+        player.peachGuard += 1;
+        spawnFloatText(item.x, item.y - 42, "無敵！", "#ffe08a");
+        syncStatusHud();
+      }
       sfxPeach();
     } else {
       player.feather = true;
       if (selectedCharId === "luna") {
-        player.reverses = Math.max(player.reverses, 2);
-      } else if (selectedCharId !== "meteor") {
+        player.laserGuard += 1;
+        spawnFloatText(item.x, item.y - 42, "レーザー無効", "#ffd0e8");
+      } else {
         player.reverses = Math.min(2, player.reverses + 1);
       }
       const gained = addScore(FEATHER_BONUS * comboMult());
@@ -1100,7 +1111,7 @@
   }
 
   function smashSpikesNearLanding() {
-    const range = player.feather ? 130 : 78;
+    const range = 78;
     let smashed = 0;
     for (let i = obstacles.length - 1; i >= 0; i--) {
       const o = obstacles[i];
@@ -1111,10 +1122,7 @@
         smashed += 1;
       }
     }
-    if (smashed > 0 && player.feather) {
-      player.feather = false;
-      syncStatusHud();
-    }
+    if (smashed > 0) syncStatusHud();
   }
 
   function spikeRect(o) {
@@ -1159,6 +1167,38 @@
     return player.dashing && (selectedCharId === "comet" || moonlight > 0);
   }
 
+  function triggerGuard(text, color) {
+    player.invuln = 0.85;
+    player.squish = 1.35;
+    breakCombo();
+    sfxHit();
+    spawnBurst(player.x, player.y, color, 14);
+    spawnFloatText(player.x, player.y - 28, text, color);
+    syncStatusHud();
+  }
+
+  function consumeHitGuard(o) {
+    if (o.type === "beam" && player.laserGuard > 0) {
+      player.laserGuard -= 1;
+      triggerGuard("レーザー無効！", "#ffd0e8");
+      destroyObstacle(o, 0, "#ffd0e8");
+      return true;
+    }
+    if (player.shield > 0) {
+      player.shield -= 1;
+      triggerGuard("ガード！", "#7a5ab0");
+      if (o.type === "beam") destroyObstacle(o, 0, "#7a5ab0");
+      return true;
+    }
+    if (player.peachGuard > 0) {
+      player.peachGuard -= 1;
+      triggerGuard("無敵！", "#ff8fab");
+      if (o.type === "beam") destroyObstacle(o, 0, "#ff8fab");
+      return true;
+    }
+    return false;
+  }
+
   function resolveHit(o) {
     if (player.invuln > 0 || moonlight > 0) {
       if (o.type !== "beam" || moonlight > 0) {
@@ -1170,17 +1210,7 @@
       destroyObstacle(o, SMASH_SCORE, "#3a9fd0");
       return "ok";
     }
-    if (player.shield > 0) {
-      player.shield -= 1;
-      player.invuln = 0.85;
-      player.squish = 1.35;
-      breakCombo();
-      sfxHit();
-      spawnBurst(player.x, player.y, "#c070d0", 14);
-      spawnFloatText(player.x, player.y - 28, "ガード！", "#7a5ab0");
-      syncStatusHud();
-      return "ok";
-    }
+    if (consumeHitGuard(o)) return "ok";
     return "die";
   }
 
@@ -1681,11 +1711,15 @@
     }
   }
 
+  function fireworksGlow() {
+    return score >= 10000;
+  }
+
   function drawCrow(o) {
     const x = o.x;
     const y = (o.drawY != null ? o.drawY : o.y) + o.h * 0.45;
     const flap = Math.sin(animT * 12 + (o.t || 0)) * 12;
-    const needOutline = score >= 10000;
+    const needOutline = fireworksGlow();
     if (needOutline) {
       ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
       ctx.beginPath();
@@ -1729,6 +1763,13 @@
     const x = o.x;
     const y = (o.drawY != null ? o.drawY : o.y) + o.h * 0.5;
     const flap = Math.sin(animT * 16 + (o.t || 0)) * 8;
+    const needOutline = fireworksGlow();
+    if (needOutline) {
+      ctx.fillStyle = "rgba(255, 210, 230, 0.28)";
+      ctx.beginPath();
+      ctx.ellipse(x + 23, y - 2, 32, 26, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.fillStyle = "#5a1428";
     ctx.beginPath();
     ctx.moveTo(x + 18, y - 10);
@@ -1740,7 +1781,7 @@
     ctx.lineTo(x + 24, y - 11);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = "#8a1e3a";
+    ctx.fillStyle = needOutline ? "#b03a58" : "#8a1e3a";
     ctx.beginPath();
     ctx.moveTo(x + 22, y);
     ctx.lineTo(x - 4, y - 16 - flap);
@@ -1757,7 +1798,7 @@
     ctx.lineTo(x + 34, y + 2);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = "#6e1630";
+    ctx.fillStyle = needOutline ? "#8a2844" : "#6e1630";
     ctx.beginPath();
     ctx.ellipse(x + 23, y + 2, 12, 9, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -1775,13 +1816,18 @@
     ctx.beginPath();
     ctx.arc(x + 28, y - 1, 1.3, 0, Math.PI * 2);
     ctx.fill();
+    if (needOutline) {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(x + 23, y + 2, 12, 9, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   function drawObstacle(o) {
     if (o.type === "spike") {
-      const r = spikeRect(o);
       ctx.fillStyle = "#d8d0e8";
-      const dir = o.side === "left" ? 1 : -1;
       const baseX = o.side === "left" ? WALL : W - WALL;
       const tipX = o.side === "left" ? WALL + o.w : W - WALL - o.w;
       const n = Math.max(2, Math.floor(o.h / 22));
@@ -1796,7 +1842,8 @@
         ctx.fill();
       }
       ctx.fillStyle = "#ff6b9a";
-      ctx.fillRect(r.x, r.y, 4 * dir * dir, r.h);
+      const lineX = o.side === "left" ? WALL : W - WALL - 4;
+      ctx.fillRect(lineX, o.y, 4, o.h);
     } else if (o.type === "crow") {
       drawCrow(o);
     } else if (o.type === "bat") {
