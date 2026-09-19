@@ -118,8 +118,11 @@
           </div>
         </div>
         <div class="sound-settings">
-          <label class="bgm-select-wrap">
-            <span class="sound-field-label">BGM</span>
+          <div class="bgm-select-wrap">
+            <div class="bgm-label-row">
+              <span class="sound-field-label">BGM</span>
+              <button id="btn-bgm-preview" class="btn-bgm-preview" type="button">楽曲再生</button>
+            </div>
             <select id="bgm-mode" class="bgm-select" aria-label="BGM選択">
               <option value="0">PEACH FUNKY RUN</option>
               <option value="1">PEACH OVERDRIVE</option>
@@ -129,7 +132,7 @@
               <option value="random">ランダム（1曲ループ）</option>
               <option value="off">BGMなし</option>
             </select>
-          </label>
+          </div>
           <label class="sound-toggle">
             <span class="sound-toggle-label">効果音</span>
             <input id="toggle-sfx" type="checkbox" checked>
@@ -143,7 +146,7 @@
         </div>
         <button id="btn-start" class="btn primary" type="button">スタート</button>
         <p class="hint">タップ / クリック / スペースでダッシュ</p>
-        <p class="version" id="app-version">Ver.2.09</p>
+        <p class="version" id="app-version">Ver.2.10</p>
       </div>
     </div>
 

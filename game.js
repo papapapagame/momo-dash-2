@@ -3,7 +3,7 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.09";
+  const APP_VERSION = "2.10";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
@@ -113,6 +113,7 @@
   const btnDebugTitle = document.getElementById("btn-debug-title");
   const debugBadge = document.getElementById("debug-badge");
   const bgmModeSelect = document.getElementById("bgm-mode");
+  const btnBgmPreview = document.getElementById("btn-bgm-preview");
   const toggleSfx = document.getElementById("toggle-sfx");
   const toggleFireworks = document.getElementById("toggle-fireworks");
   const charBtnStar = document.getElementById("char-btn-star");
@@ -169,6 +170,7 @@
   let bgm = null;
   let bgmTrackIndex = 0;
   let bgmEndedBound = false;
+  let bgmPreviewing = false;
 
   const player = {
     side: "left",
@@ -610,7 +612,8 @@
     if (!bgmEndedBound) {
       bgmEndedBound = true;
       bgm.addEventListener("ended", function () {
-        if (state !== "playing" || bgmMode !== "sequence") return;
+        if (bgmMode !== "sequence") return;
+        if (state !== "playing" && !bgmPreviewing) return;
         bgmTrackIndex = (bgmTrackIndex + 1) % BGM_TRACKS.length;
         loadBgmTrack(bgmTrackIndex, true);
         startBgmPlayback(true);
@@ -653,7 +656,8 @@
       playPromise.catch(function () {
         const retry = function () {
           audio.removeEventListener("canplay", retry);
-          if (state !== "playing" || bgmMode === "off") return;
+          if (bgmMode === "off") return;
+          if (state !== "playing" && !bgmPreviewing) return;
           audio.play().catch(function () {});
         };
         audio.addEventListener("canplay", retry);
@@ -685,19 +689,58 @@
     } catch (err) {}
   }
 
+  function syncBgmPreviewButton() {
+    if (!btnBgmPreview) return;
+    btnBgmPreview.disabled = bgmMode === "off";
+    btnBgmPreview.textContent = bgmPreviewing ? "再生停止" : "楽曲再生";
+    btnBgmPreview.classList.toggle("is-playing", bgmPreviewing);
+    btnBgmPreview.setAttribute("aria-pressed", bgmPreviewing ? "true" : "false");
+  }
+
+  function stopTitlePreview() {
+    bgmPreviewing = false;
+    if (state !== "playing") stopBgm();
+    syncBgmPreviewButton();
+  }
+
+  function playTitlePreview() {
+    if (state !== "title" || bgmMode === "off") {
+      stopTitlePreview();
+      return;
+    }
+    resumeAudio();
+    bgmPreviewing = true;
+    bgmTrackIndex = pickTrackIndexForMode();
+    if (bgmTrackIndex < 0) {
+      stopTitlePreview();
+      return;
+    }
+    loadBgmTrack(bgmTrackIndex, true);
+    startBgmPlayback(true);
+    syncBgmPreviewButton();
+  }
+
+  function toggleTitlePreview() {
+    if (bgmPreviewing) stopTitlePreview();
+    else playTitlePreview();
+  }
+
   function setBgmMode(mode) {
     if (BGM_MODE_VALUES.indexOf(mode) === -1) mode = "0";
     bgmMode = mode;
     localStorage.setItem(BGM_MODE_KEY, bgmMode);
     if (bgmModeSelect) bgmModeSelect.value = bgmMode;
     if (state === "playing") {
+      bgmPreviewing = false;
       if (bgmMode === "off") stopBgm();
       else {
         resumeAudio();
         playBgm(true);
       }
+    } else if (state === "title" && bgmPreviewing && bgmMode !== "off") {
+      playTitlePreview();
     } else {
-      stopBgm();
+      stopTitlePreview();
     }
   }
 
@@ -822,7 +865,7 @@
     gameoverScreen.classList.add("hidden");
     hud.classList.add("hidden");
     syncDebugUi();
-    stopBgm();
+    stopTitlePreview();
     resetGame();
     initDecor();
     syncCharSelectUi();
@@ -848,6 +891,8 @@
     syncDebugUi();
     syncStatusHud();
     if (selectedCharId === "star") startMoonlight();
+    bgmPreviewing = false;
+    syncBgmPreviewButton();
     playBgm(true);
     lastTime = performance.now();
   }
@@ -2293,6 +2338,12 @@
   bgmModeSelect.addEventListener("change", function () {
     setBgmMode(bgmModeSelect.value);
   });
+  if (btnBgmPreview) {
+    btnBgmPreview.addEventListener("click", function (e) {
+      e.stopPropagation();
+      toggleTitlePreview();
+    });
+  }
   toggleSfx.addEventListener("click", function (e) { e.stopPropagation(); });
   toggleFireworks.addEventListener("click", function (e) { e.stopPropagation(); });
   bgmModeSelect.addEventListener("click", function (e) { e.stopPropagation(); });
@@ -2315,6 +2366,7 @@
   toggleSfx.checked = sfxEnabled;
   toggleFireworks.checked = fireworksEnabled;
   bgmModeSelect.value = bgmMode;
+  syncBgmPreviewButton();
   syncModeSelectUi();
   syncModeRecordsUi();
   syncCharSelectUi();
