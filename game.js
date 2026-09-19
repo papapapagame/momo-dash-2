@@ -3,7 +3,7 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.10";
+  const APP_VERSION = "2.11";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
@@ -630,7 +630,6 @@
     audio.loop = bgmMode !== "sequence";
     if (audio.src !== url) {
       audio.src = url;
-      if (shouldLoad !== false) audio.load();
     }
   }
 
@@ -643,10 +642,16 @@
     return 0;
   }
 
+  function bgmAllowed() {
+    if (bgmMode === "off") return false;
+    return state === "playing" || bgmPreviewing;
+  }
+
   function startBgmPlayback(fromStart) {
     const audio = ensureBgm();
+    audio.muted = false;
     audio.volume = BGM_VOLUME;
-    if (fromStart) {
+    if (fromStart && audio.readyState > 0) {
       try {
         audio.currentTime = 0;
       } catch (err) {}
@@ -656,11 +661,12 @@
       playPromise.catch(function () {
         const retry = function () {
           audio.removeEventListener("canplay", retry);
-          if (bgmMode === "off") return;
-          if (state !== "playing" && !bgmPreviewing) return;
+          audio.removeEventListener("loadeddata", retry);
+          if (!bgmAllowed()) return;
           audio.play().catch(function () {});
         };
         audio.addEventListener("canplay", retry);
+        audio.addEventListener("loadeddata", retry);
       });
     }
   }
@@ -2241,10 +2247,11 @@
   }
 
   function isInteractiveTarget(target) {
+    const el = target && target.nodeType === 1 ? target : (target && target.parentElement);
     return !!(
-      target &&
-      target.closest &&
-      target.closest(
+      el &&
+      el.closest &&
+      el.closest(
         "button, a, input, select, label, .panel, .sound-settings, .char-select, .mode-select, .mode-records, .user-row, .name-register-panel, .debug-exit-btn"
       )
     );
@@ -2339,10 +2346,17 @@
     setBgmMode(bgmModeSelect.value);
   });
   if (btnBgmPreview) {
-    btnBgmPreview.addEventListener("click", function (e) {
+    let lastPreviewTap = 0;
+    const onPreviewTap = function (e) {
       e.stopPropagation();
+      if (e.cancelable) e.preventDefault();
+      const now = performance.now();
+      if (now - lastPreviewTap < 400) return;
+      lastPreviewTap = now;
       toggleTitlePreview();
-    });
+    };
+    btnBgmPreview.addEventListener("pointerdown", onPreviewTap);
+    btnBgmPreview.addEventListener("touchstart", onPreviewTap, { passive: false });
   }
   toggleSfx.addEventListener("click", function (e) { e.stopPropagation(); });
   toggleFireworks.addEventListener("click", function (e) { e.stopPropagation(); });

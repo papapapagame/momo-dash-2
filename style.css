@@ -562,16 +562,22 @@ body {
 }
 
 .btn-bgm-preview {
-  padding: 4px 12px;
+  padding: 8px 14px;
+  min-height: 36px;
   border: 1px solid rgba(58, 42, 34, 0.18);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.92);
   color: var(--ink);
   font-family: inherit;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
   flex-shrink: 0;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  position: relative;
+  z-index: 2;
 }
 
 .btn-bgm-preview:active {
