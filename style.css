@@ -47,10 +47,10 @@ body {
 
 #game-canvas {
   display: block;
-  width: min(100vw, calc(100dvh * 16 / 9));
-  height: min(100dvh, calc(100vw * 9 / 16));
-  max-width: 960px;
-  max-height: 540px;
+  width: min(100vw, calc(100dvh * 9 / 16));
+  height: min(100dvh, calc(100vw * 16 / 9));
+  max-width: 540px;
+  max-height: 960px;
   border-radius: 12px;
   box-shadow: 0 16px 40px var(--shadow);
   background: var(--sky-mid);
@@ -62,8 +62,8 @@ body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(100vw, calc(100dvh * 16 / 9), 960px);
-  height: min(100dvh, calc(100vw * 9 / 16), 540px);
+  width: min(100vw, calc(100dvh * 9 / 16), 540px);
+  height: min(100dvh, calc(100vw * 16 / 9), 960px);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -185,7 +185,11 @@ body {
 
 .overlay {
   position: absolute;
-  inset: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(100vw, calc(100dvh * 9 / 16), 540px);
+  height: min(100dvh, calc(100vw * 16 / 9), 960px);
   display: flex;
   align-items: center;
   justify-content: center;
