@@ -3,7 +3,7 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.02";
+  const APP_VERSION = "2.03";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
@@ -43,7 +43,7 @@
     comet: {
       id: "comet",
       name: "コメット桃",
-      desc: "ダッシュ中に通路の敵やランタンを彗星のように吹き飛ばしてスコアにする！羽を取ると引き返しを1回ストック（最大2）。",
+      desc: "ダッシュ中に通路の敵や月のかけらを彗星のように吹き飛ばしてスコアにする！羽を取ると引き返しを1回ストック（最大2）。",
       distMult: 0.85,
       moonGain: 1,
       canReverse: false,
@@ -143,6 +143,7 @@
   let maxCombo = 0;
   let moonGauge = 0;
   let moonlight = 0;
+  let lastSpeedTier = 0;
 
   let stars = [];
   let shootingStars = [];
@@ -640,6 +641,7 @@
     maxCombo = 0;
     moonGauge = selectedCharId === "star" ? MOON_MAX : 0;
     moonlight = 0;
+    lastSpeedTier = 0;
     player.side = "left";
     player.x = wallX("left");
     player.y = PLAYER_Y;
@@ -842,7 +844,11 @@
   }
 
   function difficultyFactor() {
-    return Math.min(1, distance / 4200);
+    return Math.min(1, score / 5000);
+  }
+
+  function speedTier() {
+    return Math.min(6, Math.floor(score / 800));
   }
 
   function spawnSpike(side, h) {
@@ -859,22 +865,24 @@
   function spawnObstacle() {
     const d = difficultyFactor();
     const types = ["spike"];
-    if (selectedMode !== "easy" && d > 0.08) types.push("bat");
-    if (score >= 900) types.push("lantern");
-    if (score >= 2800) types.push("beam");
+    if (score >= 600 && selectedMode !== "easy") types.push("bat");
+    if (score >= 1000) types.push("shard");
+    if (score >= 1800) types.push("beam");
+    if (score >= 2800) types.push("bat", "spike");
     if (selectedMode === "hard") types.push("bat", "spike");
+    if (d > 0.7) types.push("shard", "beam");
     const type = types[Math.floor(Math.random() * types.length)];
 
     if (type === "spike") {
-      const h = 70 + Math.random() * 50;
+      const h = 70 + Math.random() * (50 + d * 30);
       spawnSpike(nextSpikeSide, h);
       nextSpikeSide = otherSide(nextSpikeSide);
-      if (selectedMode === "hard" && Math.random() < 0.28) {
+      if ((selectedMode === "hard" || score >= 2200) && Math.random() < 0.22 + d * 0.2) {
         const lateH = 50 + Math.random() * 30;
         obstacles.push({
           type: "spike",
           side: nextSpikeSide,
-          y: -h - lateH - 90,
+          y: -h - lateH - 100,
           h: lateH,
           w: 26,
           blown: false,
@@ -890,24 +898,23 @@
         t: Math.random() * 10,
         blown: false,
       });
-    } else if (type === "lantern") {
+    } else if (type === "shard") {
       obstacles.push({
-        type: "lantern",
-        x: W * 0.5 - 14,
-        y: -90,
-        w: 28,
-        h: 70,
+        type: "shard",
+        x: W * 0.38 + Math.random() * W * 0.18,
+        y: -50,
+        w: 46,
+        h: 40,
+        bob: Math.random() * Math.PI * 2,
         blown: false,
       });
     } else if (type === "beam") {
       obstacles.push({
         type: "beam",
-        x: WALL,
-        y: -24,
-        w: W - WALL * 2,
+        x: WALL + 42,
+        y: -30,
+        w: W - WALL * 2 - 84,
         h: 18,
-        warn: 0.7,
-        active: 0.38,
         phase: "warn",
         blown: false,
       });
@@ -984,6 +991,9 @@
     }
     if (o.type === "bat") return { x: o.x + o.w * 0.5, y: o.y + o.h * 0.5 };
     if (o.type === "beam") return { x: W * 0.5, y: o.y + o.h * 0.5 };
+    if (o.type === "shard") {
+      return { x: o.x + o.w * 0.5, y: o.y + o.h * 0.5 + Math.sin(o.bob || 0) * 5 };
+    }
     return { x: o.x + o.w * 0.5, y: o.y + o.h * 0.5 };
   }
 
@@ -1042,13 +1052,15 @@
     }
     if (o.type === "beam") {
       if (o.phase !== "active") return false;
+      if (!player.dashing) return false;
       return circleHitsRect(player.x, player.y, pr, o.x, o.y, o.w, o.h);
     }
     if (o.type === "bat") {
       return circleHitsRect(player.x, player.y, pr, o.x, o.y, o.w, o.h);
     }
-    if (o.type === "lantern") {
-      return circleHitsRect(player.x, player.y, pr, o.x, o.y, o.w, o.h);
+    if (o.type === "shard") {
+      const bob = Math.sin(o.bob || 0) * 5;
+      return circleHitsRect(player.x, player.y, pr, o.x, o.y + bob, o.w, o.h);
     }
     return false;
   }
@@ -1085,17 +1097,21 @@
 
   function updateWorld(dt) {
     const dashBoost = moonlight > 0 ? 1.2 : 1;
-    const target =
-      (280 + difficultyFactor() * 200) *
-      dashBoost *
-      (selectedMode === "hard" ? 1.1 : selectedMode === "easy" ? 0.88 : 1);
-    speed += (target - speed) * Math.min(1, dt * 3);
+    const base = selectedMode === "easy" ? 250 : selectedMode === "hard" ? 305 : 280;
+    const target = (base + difficultyFactor() * 260) * dashBoost;
+    speed += (target - speed) * Math.min(1, dt * 2.2);
     distance += speed * dt;
     distScoreAcc += speed * dt * 0.05 * currentChar().distMult * (moonlight > 0 ? 1.5 : 1);
     if (distScoreAcc >= 1) {
       const add = Math.floor(distScoreAcc);
       distScoreAcc -= add;
       setScore(score + add);
+    }
+    const tier = speedTier();
+    if (tier > lastSpeedTier) {
+      lastSpeedTier = tier;
+      spawnFloatText(W * 0.5, PLAYER_Y - 90, "スピードアップ！", "#ffe08a");
+      sfxStar();
     }
     syncSpeedDisplay();
 
@@ -1115,7 +1131,7 @@
     spawnTimer += dt;
     if (spawnTimer >= nextSpawn) {
       spawnTimer = 0;
-      nextSpawn = (selectedMode === "easy" ? 1.35 : selectedMode === "hard" ? 0.72 : 0.95) - difficultyFactor() * 0.28;
+      nextSpawn = (selectedMode === "easy" ? 1.4 : selectedMode === "hard" ? 0.78 : 1.02) - difficultyFactor() * 0.48;
       nextSpawn = Math.max(0.55, nextSpawn + Math.random() * 0.25);
       spawnObstacle();
     }
@@ -1147,14 +1163,11 @@
       if (o.type === "bat") {
         o.t += dt;
         o.x += Math.sin(o.t * 3.4) * 40 * dt;
+      } else if (o.type === "shard") {
+        o.bob = (o.bob || 0) + dt * 2.2;
       } else if (o.type === "beam") {
-        if (o.phase === "warn") {
-          o.warn -= dt;
-          if (o.warn <= 0) o.phase = "active";
-        } else if (o.phase === "active") {
-          o.active -= dt;
-          if (o.active <= 0) o.phase = "done";
-        }
+        if (o.phase === "warn" && o.y + o.h > PLAYER_Y - 230) o.phase = "active";
+        if (o.y > PLAYER_Y + 55) o.phase = "done";
       }
       if (o.y > H + 80) obstacles.splice(i, 1);
     }
@@ -1344,30 +1357,46 @@
       ctx.quadraticCurveTo(o.x + 40, o.y + 2 + flap, o.x + 30, o.y + 16);
       ctx.quadraticCurveTo(o.x + 24, o.y + 12, o.x + 18, o.y + 12);
       ctx.fill();
-    } else if (o.type === "lantern") {
-      ctx.fillStyle = "#3a2a22";
-      ctx.fillRect(o.x + 10, o.y, 8, o.h);
-      ctx.fillStyle = "#c07040";
-      ctx.fillRect(o.x, o.y + o.h - 22, o.w, 22);
-      ctx.fillStyle = "rgba(255, 180, 70, 0.9)";
+    } else if (o.type === "shard") {
+      const cx = o.x + o.w * 0.5;
+      const cy = o.y + o.h * 0.5 + Math.sin(o.bob || 0) * 5;
+      ctx.fillStyle = "rgba(255, 230, 170, 0.22)";
       ctx.beginPath();
-      ctx.arc(o.x + o.w * 0.5, o.y + o.h - 10, 8, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 28, 0, Math.PI * 2);
+      ctx.fill();
+      const rock = ctx.createRadialGradient(cx - 6, cy - 8, 4, cx, cy, 22);
+      rock.addColorStop(0, "#f0e0c8");
+      rock.addColorStop(0.45, "#c8b090");
+      rock.addColorStop(1, "#8a7060");
+      ctx.fillStyle = rock;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 22, 18, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(90, 70, 60, 0.35)";
+      ctx.beginPath();
+      ctx.arc(cx + 6, cy + 2, 5, 0, Math.PI * 2);
+      ctx.arc(cx - 8, cy + 4, 3.5, 0, Math.PI * 2);
       ctx.fill();
     } else if (o.type === "beam") {
+      const insetX = o.x;
+      const insetW = o.w;
       if (o.phase === "warn") {
-        ctx.fillStyle = "rgba(255, 80, 120, " + (0.12 + 0.14 * Math.sin(animT * 16)) + ")";
-        ctx.fillRect(o.x, o.y, o.w, o.h + 8);
-        ctx.setLineDash([8, 6]);
-        ctx.strokeStyle = "rgba(255, 120, 160, 0.85)";
-        ctx.strokeRect(o.x, o.y, o.w, o.h);
+        ctx.fillStyle = "rgba(255, 220, 120, " + (0.12 + 0.14 * Math.sin(animT * 14)) + ")";
+        ctx.fillRect(insetX, o.y, insetW, o.h + 6);
+        ctx.setLineDash([10, 7]);
+        ctx.strokeStyle = "rgba(255, 236, 170, 0.9)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(insetX, o.y, insetW, o.h);
         ctx.setLineDash([]);
       } else if (o.phase === "active") {
-        const glow = ctx.createLinearGradient(o.x, o.y, o.x, o.y + o.h);
-        glow.addColorStop(0, "rgba(255, 80, 180, 0.15)");
-        glow.addColorStop(0.5, "rgba(255, 230, 255, 0.95)");
-        glow.addColorStop(1, "rgba(120, 80, 255, 0.15)");
+        const glow = ctx.createLinearGradient(insetX, o.y, insetX + insetW, o.y);
+        glow.addColorStop(0, "rgba(255, 200, 80, 0.05)");
+        glow.addColorStop(0.5, "rgba(255, 248, 210, 0.95)");
+        glow.addColorStop(1, "rgba(255, 200, 80, 0.05)");
         ctx.fillStyle = glow;
-        ctx.fillRect(o.x, o.y - 6, o.w, o.h + 12);
+        ctx.fillRect(insetX - 4, o.y - 8, insetW + 8, o.h + 16);
+        ctx.fillStyle = "rgba(255, 240, 180, 0.85)";
+        ctx.fillRect(insetX, o.y + 4, insetW, 6);
       }
     }
   }
