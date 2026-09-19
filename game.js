@@ -3,12 +3,12 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.07";
+  const APP_VERSION = "2.08";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
   const DASH_DUR = 0.26;
-  const LUNA_DASH_DUR = 0.68;
+  const LUNA_DASH_DUR = 1.36;
   const PEACH_SCORE = 100;
   const FEATHER_BONUS = 150;
   const SMASH_SCORE = 100;
