@@ -3,7 +3,7 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.11";
+  const APP_VERSION = "2.13";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
@@ -28,10 +28,10 @@
   const STAR_UNLOCK_KEY = "momoDash2StarUnlock";
   const BGM_VOLUME = 0.45;
   const BGM_TRACKS = [
+    { file: "sounds/momo-dash.mp3", label: "ももダッシュ！" },
     { file: "sounds/peach-funky-run.mp3", label: "PEACH FUNKY RUN" },
     { file: "sounds/peach-overdrive.mp3", label: "PEACH OVERDRIVE" },
-    { file: "sounds/momo-dash.mp3", label: "ももダッシュ！" },
-    { file: "sounds/momo-panic.mp3", label: "もももも☆ぱにっく！" },
+    { file: "sounds/momo-panic.mp3", label: "もももも☆ぱにっく！！" },
   ];
   const CHAR_IDS = ["night", "comet", "meteor", "luna", "star"];
   const MODE_IDS = ["easy", "normal", "hard"];
