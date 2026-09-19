@@ -3,14 +3,13 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.03";
+  const APP_VERSION = "2.04";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
   const DASH_DUR = 0.26;
   const LUNA_DASH_DUR = 0.34;
   const PEACH_SCORE = 100;
-  const STAR_SCORE = 50;
   const FEATHER_BONUS = 150;
   const SMASH_SCORE = 100;
   const MOON_MAX = 100;
@@ -23,7 +22,7 @@
   const MODE_KEY = "momoDash2Mode";
   const BGM_MODE_KEY = "momoDash2BgmMode";
   const SFX_KEY = "momoDash2Sfx";
-  const STARS_KEY = "momoDash2Stars";
+  const FIREWORKS_KEY = "momoDash2Fireworks";
   const CHAR_KEY = "momoDash2Char";
   const USER_KEY = "momoDash2UserName";
   const STAR_UNLOCK_KEY = "momoDash2StarUnlock";
@@ -43,7 +42,7 @@
     comet: {
       id: "comet",
       name: "コメット桃",
-      desc: "ダッシュ中に通路の敵や月のかけらを彗星のように吹き飛ばしてスコアにする！羽を取ると引き返しを1回ストック（最大2）。",
+      desc: "ダッシュ中に通路のカラスや蝙蝠、月のかけらを彗星のように吹き飛ばしてスコアにする！羽を取ると引き返しを1回ストック（最大2）。",
       distMult: 0.85,
       moonGain: 1,
       canReverse: false,
@@ -109,7 +108,7 @@
   const debugBadge = document.getElementById("debug-badge");
   const bgmModeSelect = document.getElementById("bgm-mode");
   const toggleSfx = document.getElementById("toggle-sfx");
-  const toggleStars = document.getElementById("toggle-stars");
+  const toggleFireworks = document.getElementById("toggle-fireworks");
   const charBtnStar = document.getElementById("char-btn-star");
 
   let state = "title";
@@ -119,7 +118,7 @@
   let starUnlocked = localStorage.getItem(STAR_UNLOCK_KEY) === "1";
   let bgmMode = loadBgmMode();
   let sfxEnabled = localStorage.getItem(SFX_KEY) !== "0";
-  let starsEnabled = localStorage.getItem(STARS_KEY) !== "0";
+  let fireworksEnabled = localStorage.getItem(FIREWORKS_KEY) !== "0";
   let userName = loadUserName();
   let pendingStartAsDebug = false;
   let selectedCharId = loadSelectedChar();
@@ -128,6 +127,7 @@
 
   let score = 0;
   let distance = 0;
+  let lastDistScore = 0;
   let distScoreAcc = 0;
   let speed = 280;
   let spawnTimer = 0;
@@ -143,11 +143,14 @@
   let maxCombo = 0;
   let moonGauge = 0;
   let moonlight = 0;
-  let lastSpeedTier = 0;
 
+  let clouds = [];
   let stars = [];
   let shootingStars = [];
+  let planets = [];
+  let fireworks = [];
   let shootTimer = 0;
+  let fireworkTimer = 0;
   let obstacles = [];
   let items = [];
   let particles = [];
@@ -380,7 +383,7 @@
   }
 
   function syncSpeedDisplay() {
-    if (speedEl) speedEl.textContent = Math.round((speed / 280) * 100) + "%";
+    if (speedEl) speedEl.textContent = Math.floor(speedPercent()) + "%";
   }
 
   function syncMoonHud() {
@@ -453,20 +456,34 @@
     spawnFloatText(player.x, player.y - 36, "ムーンダッシュ！", "#ffd24a");
   }
 
-  function worldPhase() {
-    if (score >= 7000) return "cosmos";
-    if (score >= 4000) return "moon";
-    if (score >= 1800) return "night";
-    return "dusk";
+  function skyPhase() {
+    if (score >= 5000) return "space";
+    if (score >= 3000) return "night";
+    if (score >= 2000) return "evening";
+    return "day";
+  }
+
+  function spaceTier() {
+    if (score < 5000) return -1;
+    return Math.min(5, Math.floor((score - 5000) / 1000));
   }
 
   function initDecor() {
+    clouds = [];
+    for (let i = 0; i < 7; i++) {
+      clouds.push({
+        x: WALL + 20 + Math.random() * (W - WALL * 2 - 40),
+        y: 40 + Math.random() * 220,
+        s: 0.55 + Math.random() * 0.9,
+        speed: 16 + Math.random() * 22,
+      });
+    }
     stars = [];
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < 110; i++) {
       stars.push({
-        x: WALL + 10 + Math.random() * (W - WALL * 2 - 20),
+        x: Math.random() * W,
         y: Math.random() * H,
-        r: 0.6 + Math.random() * 1.7,
+        r: 0.6 + Math.random() * 1.8,
         tw: Math.random() * Math.PI * 2,
         bright: 0.4 + Math.random() * 0.6,
       });
@@ -479,8 +496,20 @@
         lit: Math.random() > 0.35,
       });
     }
+    planets = [
+      { x: 270, y: 110, r: 36, style: "rose", drift: 8, unlock: 0 },
+      { x: 120, y: 70, r: 18, style: "ocean", drift: 12, unlock: 0 },
+      { x: 400, y: 180, r: 26, style: "saturn", drift: 6, unlock: 0 },
+      { x: 80, y: 240, r: 22, style: "ice", drift: 9, unlock: 1 },
+      { x: 460, y: 90, r: 16, style: "mint", drift: 14, unlock: 1 },
+      { x: 200, y: 300, r: 32, style: "lava", drift: 7, unlock: 2 },
+      { x: 340, y: 50, r: 42, style: "gas", drift: 5, unlock: 3 },
+      { x: 150, y: 160, r: 20, style: "peach", drift: 13, unlock: 4 },
+    ];
     shootingStars = [];
+    fireworks = [];
     shootTimer = 0;
+    fireworkTimer = 0;
   }
 
   function initAudio() {
@@ -534,10 +563,9 @@
     playTone(980, 0.1, "triangle", 0.1, 1200);
   }
 
-  function sfxStar() {
+  function sfxScore() {
     if (!sfxEnabled) return;
-    playTone(880, 0.08, "sine", 0.12, 1400);
-    playTone(1320, 0.1, "triangle", 0.1);
+    playTone(660, 0.06, "sine", 0.08);
   }
 
   function sfxFeather() {
@@ -620,10 +648,11 @@
   function resetGame() {
     score = 0;
     distance = 0;
+    lastDistScore = 0;
     distScoreAcc = 0;
     speed = 280;
     spawnTimer = 0;
-    nextSpawn = selectedMode === "easy" ? 1.8 : selectedMode === "hard" ? 0.85 : 1.15;
+    nextSpawn = selectedMode === "easy" ? 2.6 : 1.2;
     itemSpawnTimer = 0;
     nextItemSpawn = 1.4;
     nextSpikeSide = "right";
@@ -633,7 +662,9 @@
     floatTexts = [];
     trails = [];
     shootingStars = [];
+    fireworks = [];
     shootTimer = 0;
+    fireworkTimer = 0;
     shake = 0;
     animT = 0;
     combo = 0;
@@ -641,7 +672,6 @@
     maxCombo = 0;
     moonGauge = selectedCharId === "star" ? MOON_MAX : 0;
     moonlight = 0;
-    lastSpeedTier = 0;
     player.side = "left";
     player.x = wallX("left");
     player.y = PLAYER_Y;
@@ -844,11 +874,54 @@
   }
 
   function difficultyFactor() {
-    return Math.min(1, score / 5000);
+    return Math.min(1, distance / 3500);
   }
 
-  function speedTier() {
-    return Math.min(6, Math.floor(score / 800));
+  function speedDifficultyFactor() {
+    return Math.min(1, distance / 10500);
+  }
+
+  function speedPercent() {
+    const preCap = selectedMode === "hard" ? 400 : 200;
+    const preRange = preCap - 100;
+    if (score < 10000) return 100 + speedDifficultyFactor() * preRange;
+    if (score < 15000) return preCap + ((score - 10000) / 5000) * 50;
+    return preCap + 50 + ((score - 15000) / 10000) * 50;
+  }
+
+  function currentSpeed() {
+    const pct = speedPercent();
+    return 280 + ((pct - 100) / 100) * 320;
+  }
+
+  function lateSpawnLevel() {
+    if (score < 10000) return 0;
+    return 1 + Math.floor((score - 10000) / 1000);
+  }
+
+  function nextObstacleSpawnDelay() {
+    if (selectedMode === "easy" && score < 2000) {
+      return 2.4 + Math.random() * 1.1;
+    }
+    let base = Math.max(0.55, 1.55 - difficultyFactor() * 0.9) + Math.random() * 0.45;
+    const late = lateSpawnLevel();
+    if (late > 0) {
+      base *= Math.max(0.35, 1 - late * 0.08);
+      base = Math.max(0.28, base);
+    }
+    return base;
+  }
+
+  function flyingBaseX() {
+    const min = WALL + 28;
+    const max = W - WALL - 76;
+    return min + Math.random() * (max - min);
+  }
+
+  function clampFlyX(x, w) {
+    const min = WALL + 8;
+    const max = W - WALL - 8 - w;
+    return Math.max(min, Math.min(max, x));
   }
 
   function spawnSpike(side, h) {
@@ -864,13 +937,20 @@
 
   function spawnObstacle() {
     const d = difficultyFactor();
-    const types = ["spike"];
-    if (score >= 600 && selectedMode !== "easy") types.push("bat");
-    if (score >= 1000) types.push("shard");
-    if (score >= 1800) types.push("beam");
-    if (score >= 2800) types.push("bat", "spike");
-    if (selectedMode === "hard") types.push("bat", "spike");
-    if (d > 0.7) types.push("shard", "beam");
+    let types;
+    if (selectedMode === "easy") {
+      types = ["spike"];
+      if (score >= 2000) types.push("shard");
+      if (score >= 4000) types.push("crow");
+      if (score >= 6000) types.push("bat");
+    } else {
+      types = ["spike", "shard"];
+      if (d > 0.15) types.push("crow");
+      if (d > 0.35) types.push("bat");
+      if (d > 0.4) types.push("crow", "spike", "bat");
+      if (d > 0.65) types.push("shard", "spike", "crow", "bat");
+      if (score >= 3500) types.push("beam");
+    }
     const type = types[Math.floor(Math.random() * types.length)];
 
     if (type === "spike") {
@@ -888,16 +968,40 @@
           blown: false,
         });
       }
-    } else if (type === "bat") {
+    } else if (type === "crow") {
+      const w = 48;
       obstacles.push({
-        type: "bat",
-        x: W * 0.35 + Math.random() * W * 0.3,
-        y: -40,
-        w: 36,
-        h: 24,
+        type: "crow",
+        x: flyingBaseX(),
+        baseX: 0,
+        y: -50,
+        w: w,
+        h: 34,
         t: Math.random() * 10,
+        lrAmp: 52 + Math.random() * 32,
+        lrSpeed: 2.2 + Math.random() * 1.6,
+        bobAmp: selectedMode === "hard" ? 18 + Math.random() * 16 : 10,
+        bobSpeed: selectedMode === "hard" ? 2.4 + Math.random() * 2.2 : 4,
         blown: false,
       });
+      obstacles[obstacles.length - 1].baseX = obstacles[obstacles.length - 1].x;
+    } else if (type === "bat") {
+      const w = 46;
+      obstacles.push({
+        type: "bat",
+        x: flyingBaseX(),
+        baseX: 0,
+        y: -50,
+        w: w,
+        h: 34,
+        t: Math.random() * 10,
+        lrAmp: 48 + Math.random() * 28,
+        lrSpeed: 2.4 + Math.random() * 1.8,
+        zigAmp: 10 + Math.random() * 86,
+        zigSpeed: 5 + Math.random() * 6.5,
+        blown: false,
+      });
+      obstacles[obstacles.length - 1].baseX = obstacles[obstacles.length - 1].x;
     } else if (type === "shard") {
       obstacles.push({
         type: "shard",
@@ -922,15 +1026,12 @@
   }
 
   function spawnItem() {
-    const r = Math.random();
-    let type = "peach";
-    if (r < 0.45) type = "star";
-    else if (r < 0.6) type = "feather";
+    const type = Math.random() < 0.82 ? "peach" : "feather";
     items.push({
       type: type,
       x: W * 0.38 + Math.random() * W * 0.24,
       y: -30,
-      r: type === "star" ? 13 : 15,
+      r: type === "peach" ? 16 : 22,
       bob: Math.random() * Math.PI * 2,
     });
   }
@@ -944,12 +1045,6 @@
       spawnFloatText(item.x, item.y - 20, "+" + gained, "#e85a7a");
       addMoon(10);
       sfxPeach();
-    } else if (item.type === "star") {
-      const gained = addScore(STAR_SCORE * mult);
-      spawnBurst(item.x, item.y, "#ffe08a", 14);
-      spawnFloatText(item.x, item.y - 20, "+" + gained, "#ffd24a");
-      addMoon(22);
-      sfxStar();
     } else {
       player.feather = true;
       if (selectedCharId === "luna") {
@@ -989,7 +1084,10 @@
       const x = o.side === "left" ? WALL + o.w * 0.5 : W - WALL - o.w * 0.5;
       return { x: x, y: o.y + o.h * 0.5 };
     }
-    if (o.type === "bat") return { x: o.x + o.w * 0.5, y: o.y + o.h * 0.5 };
+    if (o.type === "crow" || o.type === "bat") {
+      const y = o.drawY != null ? o.drawY : o.y;
+      return { x: o.x + o.w * 0.5, y: y + o.h * 0.5 };
+    }
     if (o.type === "beam") return { x: W * 0.5, y: o.y + o.h * 0.5 };
     if (o.type === "shard") {
       return { x: o.x + o.w * 0.5, y: o.y + o.h * 0.5 + Math.sin(o.bob || 0) * 5 };
@@ -1055,8 +1153,9 @@
       if (!player.dashing) return false;
       return circleHitsRect(player.x, player.y, pr, o.x, o.y, o.w, o.h);
     }
-    if (o.type === "bat") {
-      return circleHitsRect(player.x, player.y, pr, o.x, o.y, o.w, o.h);
+    if (o.type === "crow" || o.type === "bat") {
+      const y = o.drawY != null ? o.drawY : o.y;
+      return circleHitsRect(player.x, player.y, pr, o.x, y, o.w, o.h);
     }
     if (o.type === "shard") {
       const bob = Math.sin(o.bob || 0) * 5;
@@ -1096,22 +1195,19 @@
   }
 
   function updateWorld(dt) {
-    const dashBoost = moonlight > 0 ? 1.2 : 1;
-    const base = selectedMode === "easy" ? 250 : selectedMode === "hard" ? 305 : 280;
-    const target = (base + difficultyFactor() * 260) * dashBoost;
-    speed += (target - speed) * Math.min(1, dt * 2.2);
+    speed = currentSpeed() * (moonlight > 0 ? 1.2 : 1);
     distance += speed * dt;
-    distScoreAcc += speed * dt * 0.05 * currentChar().distMult * (moonlight > 0 ? 1.5 : 1);
-    if (distScoreAcc >= 1) {
-      const add = Math.floor(distScoreAcc);
-      distScoreAcc -= add;
-      setScore(score + add);
-    }
-    const tier = speedTier();
-    if (tier > lastSpeedTier) {
-      lastSpeedTier = tier;
-      spawnFloatText(W * 0.5, PLAYER_Y - 90, "スピードアップ！", "#ffe08a");
-      sfxStar();
+    const distScore = Math.floor(distance / 10);
+    if (distScore > lastDistScore) {
+      const rawGain = distScore - lastDistScore;
+      if (distScore % 50 === 0) sfxScore();
+      distScoreAcc += rawGain * currentChar().distMult;
+      const whole = Math.floor(distScoreAcc);
+      if (whole > 0) {
+        addScore(whole);
+        distScoreAcc -= whole;
+      }
+      lastDistScore = distScore;
     }
     syncSpeedDisplay();
 
@@ -1131,14 +1227,22 @@
     spawnTimer += dt;
     if (spawnTimer >= nextSpawn) {
       spawnTimer = 0;
-      nextSpawn = (selectedMode === "easy" ? 1.4 : selectedMode === "hard" ? 0.78 : 1.02) - difficultyFactor() * 0.48;
-      nextSpawn = Math.max(0.55, nextSpawn + Math.random() * 0.25);
+      nextSpawn = nextObstacleSpawnDelay();
       spawnObstacle();
+      const late = lateSpawnLevel();
+      const doubleChance = 0.28 + late * 0.06;
+      if (!(selectedMode === "easy" && score < 2000) &&
+          (difficultyFactor() > 0.5 || late > 0) &&
+          Math.random() < Math.min(0.7, doubleChance)) {
+        setTimeout(function () {
+          if (state === "playing") spawnObstacle();
+        }, Math.max(90, 220 - late * 12) + Math.random() * Math.max(60, 180 - late * 10));
+      }
     }
     itemSpawnTimer += dt;
     if (itemSpawnTimer >= nextItemSpawn) {
       itemSpawnTimer = 0;
-      nextItemSpawn = 1.4 + Math.random() * 0.9;
+      nextItemSpawn = 1.5 + Math.random() * 1.4;
       spawnItem();
     }
 
@@ -1160,9 +1264,14 @@
     for (let i = obstacles.length - 1; i >= 0; i--) {
       const o = obstacles[i];
       o.y += speed * dt;
-      if (o.type === "bat") {
+      if (o.type === "crow") {
         o.t += dt;
-        o.x += Math.sin(o.t * 3.4) * 40 * dt;
+        o.x = clampFlyX(o.baseX + Math.sin(o.t * o.lrSpeed) * o.lrAmp, o.w);
+        o.drawY = o.y + Math.sin(o.t * o.bobSpeed) * o.bobAmp;
+      } else if (o.type === "bat") {
+        o.t += dt;
+        o.x = clampFlyX(o.baseX + Math.sin(o.t * o.lrSpeed) * o.lrAmp, o.w);
+        o.drawY = o.y + ((2 / Math.PI) * Math.asin(Math.sin(o.t * o.zigSpeed))) * o.zigAmp;
       } else if (o.type === "shard") {
         o.bob = (o.bob || 0) + dt * 2.2;
       } else if (o.type === "beam") {
@@ -1191,7 +1300,8 @@
 
     for (let i = obstacles.length - 1; i >= 0; i--) {
       const o = obstacles[i];
-      if (canSmashCenter(o) && circleHitsRect(player.x, player.y, player.r * 0.9, o.x, o.y, o.w, o.h)) {
+      const oy = ((o.type === "crow" || o.type === "bat") && o.drawY != null) ? o.drawY : o.y;
+      if (canSmashCenter(o) && circleHitsRect(player.x, player.y, player.r * 0.9, o.x, oy, o.w, o.h)) {
         if (resolveHit(o) === "die") {
           endGame();
           return;
@@ -1230,17 +1340,37 @@
         windows[i].lit = Math.random() > 0.35;
       }
     }
-    if (starsEnabled) {
+    for (let i = 0; i < clouds.length; i++) {
+      clouds[i].y += clouds[i].speed * dt * (state === "playing" ? 0.35 : 0.15);
+      if (clouds[i].y > H + 40) {
+        clouds[i].y = -40;
+        clouds[i].x = WALL + 20 + Math.random() * (W - WALL * 2 - 40);
+      }
+    }
+
+    const phase = skyPhase();
+    if (phase === "night" || phase === "space") {
       shootTimer += dt;
-      if (shootTimer > 2.1) {
+      const tier = spaceTier();
+      const interval = phase === "space" ? Math.max(0.55, 1.1 - Math.max(0, tier) * 0.1) : 1.8;
+      if (shootTimer >= interval) {
         shootTimer = 0;
         shootingStars.push({
-          x: WALL + 40 + Math.random() * (W - WALL * 2 - 80),
-          y: 40,
-          vx: -40 + Math.random() * 80,
-          vy: 180 + Math.random() * 80,
+          x: 40 + Math.random() * (W - 80),
+          y: 20 + Math.random() * 80,
+          vx: 180 + Math.random() * 120,
+          vy: 90 + Math.random() * 80,
           life: 0.7,
         });
+        if (tier >= 3 && Math.random() < 0.45) {
+          shootingStars.push({
+            x: 40 + Math.random() * (W - 80),
+            y: 20 + Math.random() * 80,
+            vx: 180 + Math.random() * 120,
+            vy: 90 + Math.random() * 80,
+            life: 0.7,
+          });
+        }
       }
     }
     for (let i = shootingStars.length - 1; i >= 0; i--) {
@@ -1250,77 +1380,411 @@
       s.y += s.vy * dt;
       if (s.life <= 0) shootingStars.splice(i, 1);
     }
+
+    if (phase === "space") {
+      const tier = spaceTier();
+      for (let i = 0; i < planets.length; i++) {
+        const p = planets[i];
+        if (p.unlock > tier) continue;
+        p.x -= p.drift * dt * (state === "playing" ? 1 : 0.3);
+        if (p.x + p.r * 2 < -40) p.x = W + p.r + Math.random() * 60;
+      }
+      if (tier >= 5 && fireworksEnabled) {
+        fireworkTimer += dt;
+        if (fireworkTimer >= 0.45) {
+          fireworkTimer = 0;
+          spawnFirework();
+          spawnFirework();
+          if (Math.random() < 0.55) spawnFirework();
+          if (Math.random() < 0.25) spawnFirework();
+        }
+      }
+    }
+    updateFireworks(dt);
   }
 
-  function skyColors(phase) {
-    if (phase === "cosmos") return ["#07061a", "#14104a", "#2a1860"];
-    if (phase === "moon") return ["#0c1028", "#243060", "#6a6088"];
-    if (phase === "night") return ["#12143a", "#243868", "#4a3878"];
-    return ["#2a1848", "#6a3878", "#f0a070"];
+  function spawnFirework() {
+    const palette = [
+      ["#ff4d7a", "#ffb3c8", "#ffffff"],
+      ["#ffd24a", "#fff0a8", "#ffffff"],
+      ["#4db8ff", "#a8e0ff", "#ffffff"],
+      ["#7dff6a", "#c8ffb0", "#ffffff"],
+      ["#ff8a3a", "#ffd0a0", "#ffffff"],
+      ["#d080ff", "#f0c8ff", "#ffffff"],
+    ];
+    const colors = palette[(Math.random() * palette.length) | 0];
+    fireworks.push({
+      x: 40 + Math.random() * (W - 80),
+      y: H - 20,
+      vy: -(520 + Math.random() * 240),
+      burstY: 50 + Math.random() * 280,
+      phase: "rise",
+      age: 0,
+      flash: 0,
+      color: colors[0],
+      colors: colors,
+      size: 0.85 + Math.random() * 0.55,
+      trail: [],
+      sparks: [],
+    });
+  }
+
+  function spawnFireworkBurst(fw, secondary) {
+    const scale = fw.size || 1;
+    const layers = secondary
+      ? [{ n: 28, sp: 70, life: 0.7 }]
+      : [
+          { n: 48, sp: 200, life: 1 },
+          { n: 36, sp: 130, life: 0.85 },
+        ];
+    for (let L = 0; L < layers.length; L++) {
+      const layer = layers[L];
+      const n = Math.floor(layer.n * scale);
+      for (let i = 0; i < n; i++) {
+        const a = (Math.PI * 2 * i) / n + Math.random() * 0.25;
+        const sp = (layer.sp * 0.65 + Math.random() * layer.sp * 0.55) * scale;
+        fw.sparks.push({
+          x: fw.x,
+          y: fw.y,
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp,
+          life: (0.9 + Math.random() * 0.7) * layer.life,
+          r: (2.4 + Math.random() * 3.2) * scale,
+          grav: 180 + Math.random() * 120,
+          color: fw.colors[(Math.random() * fw.colors.length) | 0],
+          trail: [],
+        });
+      }
+    }
+  }
+
+  function updateFireworks(dt) {
+    if (!fireworksEnabled) {
+      fireworks = [];
+      return;
+    }
+    for (let i = fireworks.length - 1; i >= 0; i--) {
+      const fw = fireworks[i];
+      fw.age += dt;
+      if (fw.phase === "rise") {
+        fw.y += fw.vy * dt;
+        fw.vy += 90 * dt;
+        fw.trail.push({ x: fw.x, y: fw.y, life: 0.35 });
+        for (let t = fw.trail.length - 1; t >= 0; t--) {
+          fw.trail[t].life -= dt;
+          if (fw.trail[t].life <= 0) fw.trail.splice(t, 1);
+        }
+        if (fw.y <= fw.burstY) {
+          fw.phase = "burst";
+          fw.age = 0;
+          fw.flash = 1;
+          spawnFireworkBurst(fw);
+        }
+      } else {
+        if (fw.flash > 0) fw.flash = Math.max(0, fw.flash - dt * 3.5);
+        for (let s = 0; s < fw.sparks.length; s++) {
+          const spark = fw.sparks[s];
+          spark.x += spark.vx * dt;
+          spark.y += spark.vy * dt;
+          spark.vy += spark.grav * dt;
+          spark.vx *= 1 - 0.55 * dt;
+          spark.life -= dt;
+        }
+        fw.sparks = fw.sparks.filter(function (s) { return s.life > 0; });
+        if (fw.sparks.length === 0 && fw.age > 0.35) fireworks.splice(i, 1);
+      }
+    }
+  }
+
+  function drawFireworks() {
+    for (let i = 0; i < fireworks.length; i++) {
+      const fw = fireworks[i];
+      if (fw.phase === "rise") {
+        ctx.fillStyle = "#fff6c8";
+        ctx.beginPath();
+        ctx.arc(fw.x, fw.y, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        if (fw.flash > 0) {
+          ctx.globalAlpha = fw.flash * 0.45;
+          ctx.fillStyle = fw.color;
+          ctx.beginPath();
+          ctx.arc(fw.x, fw.y, 30 + fw.flash * 40, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        for (let s = 0; s < fw.sparks.length; s++) {
+          const spark = fw.sparks[s];
+          ctx.globalAlpha = Math.max(0, spark.life);
+          ctx.fillStyle = spark.color;
+          ctx.beginPath();
+          ctx.arc(spark.x, spark.y, spark.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  function drawCloud(x, y, s, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 38 * s, 16 * s, 0, 0, Math.PI * 2);
+    ctx.ellipse(x + 22 * s, y + 4, 28 * s, 14 * s, 0, 0, Math.PI * 2);
+    ctx.ellipse(x - 20 * s, y + 4, 24 * s, 12 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawStarField(mult) {
+    for (let i = 0; i < stars.length; i++) {
+      const s = stars[i];
+      const a = s.bright * (0.45 + 0.55 * Math.sin(animT * 2 + s.tw)) * mult;
+      ctx.fillStyle = "rgba(255,255,255," + a + ")";
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   function drawSky() {
-    const phase = worldPhase();
-    const c = skyColors(phase);
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, c[0]);
-    g.addColorStop(0.55, c[1]);
-    g.addColorStop(1, c[2]);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-
-    if (phase !== "dusk") {
-      for (let i = 0; i < stars.length; i++) {
-        const s = stars[i];
-        const a = s.bright * (0.45 + 0.55 * Math.sin(animT * 2 + s.tw));
-        ctx.fillStyle = "rgba(255,255,255," + a + ")";
+    const phase = skyPhase();
+    if (phase === "space") {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, "#05010f");
+      g.addColorStop(0.4, "#120828");
+      g.addColorStop(0.75, "#1a0a35");
+      g.addColorStop(1, "#0d1528");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      const nebula = ctx.createRadialGradient(W * 0.5, 140, 10, W * 0.5, 180, 240);
+      nebula.addColorStop(0, "rgba(160, 60, 180, 0.28)");
+      nebula.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = nebula;
+      ctx.fillRect(0, 0, W, H);
+      const nebula2 = ctx.createRadialGradient(W * 0.78, 220, 8, W * 0.78, 240, 170);
+      nebula2.addColorStop(0, "rgba(40, 160, 200, 0.2)");
+      nebula2.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = nebula2;
+      ctx.fillRect(0, 0, W, H);
+      drawStarField(1.1 + Math.max(0, spaceTier()) * 0.08);
+      const tier = spaceTier();
+      for (let i = 0; i < planets.length; i++) {
+        const p = planets[i];
+        if (p.unlock > tier) continue;
+        ctx.fillStyle = p.style === "rose" ? "#e8a0b8" : p.style === "ocean" ? "#6ec8f0" : p.style === "peach" ? "#ffb0a0" : "#c8b890";
         ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
         ctx.fill();
       }
+      for (let i = 0; i < shootingStars.length; i++) {
+        const s = shootingStars[i];
+        ctx.strokeStyle = "rgba(255,255,255," + Math.min(1, s.life * 1.4) + ")";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(s.x - s.vx * 0.12, s.y - s.vy * 0.12);
+        ctx.stroke();
+      }
+      if (tier >= 5 && fireworksEnabled) drawFireworks();
+      return;
+    }
+    if (phase === "night") {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, "#0a1028");
+      g.addColorStop(0.55, "#1a2450");
+      g.addColorStop(1, "#2a3868");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      drawStarField(0.9);
+      ctx.fillStyle = "#fff4c8";
+      ctx.beginPath();
+      ctx.arc(W * 0.55, 90, 36, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 224, 138, 0.22)";
+      ctx.beginPath();
+      ctx.arc(W * 0.55, 90, 52, 0, Math.PI * 2);
+      ctx.fill();
+      for (let i = 0; i < shootingStars.length; i++) {
+        const s = shootingStars[i];
+        ctx.strokeStyle = "rgba(255,255,255," + Math.min(1, s.life * 1.4) + ")";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(s.x - s.vx * 0.12, s.y - s.vy * 0.12);
+        ctx.stroke();
+      }
+      for (let i = 0; i < clouds.length; i++) {
+        drawCloud(clouds[i].x, clouds[i].y * 0.7 + 20, clouds[i].s * 0.85, "rgba(40, 50, 90, 0.45)");
+      }
+      return;
+    }
+    if (phase === "evening") {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, "#2a3a6a");
+      g.addColorStop(0.35, "#c45c6a");
+      g.addColorStop(0.65, "#e88850");
+      g.addColorStop(1, "#f0c080");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#ffb040";
+      ctx.beginPath();
+      ctx.arc(W * 0.62, H * 0.62, 48, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 140, 60, 0.28)";
+      ctx.beginPath();
+      ctx.arc(W * 0.62, H * 0.62, 72, 0, Math.PI * 2);
+      ctx.fill();
+      for (let i = 0; i < clouds.length; i++) {
+        drawCloud(clouds[i].x, clouds[i].y, clouds[i].s, "rgba(255, 200, 180, 0.55)");
+      }
+      return;
     }
 
-    ctx.fillStyle = "#fff4c8";
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#6eb8dc");
+    g.addColorStop(0.45, "#b7dff0");
+    g.addColorStop(1, "#ffe2b8");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#ffe08a";
     ctx.beginPath();
-    ctx.arc(W * 0.5, 88, phase === "moon" ? 42 : 30, 0, Math.PI * 2);
+    ctx.arc(W * 0.72, 90, 42, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "rgba(255, 220, 140, 0.16)";
+    ctx.fillStyle = "rgba(255, 224, 138, 0.25)";
     ctx.beginPath();
-    ctx.arc(W * 0.5, 88, 52, 0, Math.PI * 2);
+    ctx.arc(W * 0.72, 90, 58, 0, Math.PI * 2);
     ctx.fill();
-
-    for (let i = 0; i < shootingStars.length; i++) {
-      const s = shootingStars[i];
-      ctx.strokeStyle = "rgba(255,255,255," + Math.min(1, s.life * 1.4) + ")";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(s.x, s.y);
-      ctx.lineTo(s.x - s.vx * 0.12, s.y - s.vy * 0.12);
-      ctx.stroke();
+    for (let i = 0; i < clouds.length; i++) {
+      drawCloud(clouds[i].x, clouds[i].y, clouds[i].s, "rgba(255,255,255,0.85)");
     }
   }
 
   function drawWalls() {
-    const phase = worldPhase();
-    ctx.fillStyle = phase === "moon" || phase === "cosmos" ? "#2a2840" : "#1e1830";
+    const phase = skyPhase();
+    const fill =
+      phase === "space" ? "#1a1630" :
+      phase === "night" ? "#1e1830" :
+      phase === "evening" ? "#4a3040" : "#6a5a4a";
+    const edge =
+      phase === "day" ? "#8a7a62" :
+      phase === "evening" ? "#6a4050" : "#2a2048";
+    ctx.fillStyle = fill;
     ctx.fillRect(0, 0, WALL, H);
     ctx.fillRect(W - WALL, 0, WALL, H);
-    ctx.fillStyle = phase === "dusk" ? "#3a2458" : "#2a2048";
+    ctx.fillStyle = edge;
     ctx.fillRect(WALL - 8, 0, 8, H);
     ctx.fillRect(W - WALL, 0, 8, H);
 
     const shift = (distance * 0.4) % 48;
-    ctx.fillStyle = "rgba(255,255,255,0.04)";
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
     for (let y = -48; y < H + 48; y += 48) {
       ctx.fillRect(6, y + shift, WALL - 20, 10);
       ctx.fillRect(W - WALL + 14, y + shift + 24, WALL - 20, 10);
     }
-    for (let i = 0; i < windows.length; i++) {
-      const w = windows[i];
-      const x = w.side === "left" ? 16 : W - 38;
-      ctx.fillStyle = w.lit ? "rgba(255, 200, 120, 0.55)" : "rgba(20, 16, 40, 0.6)";
-      ctx.fillRect(x, w.y, 18, 14);
+    if (phase !== "day") {
+      for (let i = 0; i < windows.length; i++) {
+        const w = windows[i];
+        const x = w.side === "left" ? 16 : W - 38;
+        ctx.fillStyle = w.lit ? "rgba(255, 200, 120, 0.55)" : "rgba(20, 16, 40, 0.6)";
+        ctx.fillRect(x, w.y, 18, 14);
+      }
     }
+  }
+
+  function drawCrow(o) {
+    const x = o.x;
+    const y = (o.drawY != null ? o.drawY : o.y) + o.h * 0.45;
+    const flap = Math.sin(animT * 12 + (o.t || 0)) * 12;
+    const needOutline = score >= 10000;
+    if (needOutline) {
+      ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
+      ctx.beginPath();
+      ctx.ellipse(x + 22, y - 2, 34, 26, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = needOutline ? "#5a6a80" : "#3d4a5c";
+    ctx.beginPath();
+    ctx.ellipse(x + 22, y, 19, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x + 17, y);
+    ctx.quadraticCurveTo(x + 10, y - 22 - flap, x + 34, y - 5);
+    ctx.closePath();
+    ctx.fillStyle = needOutline ? "#7a8aa0" : "#55667a";
+    ctx.fill();
+    ctx.fillStyle = "#f0a040";
+    ctx.beginPath();
+    ctx.moveTo(x + 38, y);
+    ctx.lineTo(x + 50, y + 2);
+    ctx.lineTo(x + 38, y + 6);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(x + 29, y - 2, 3.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#222";
+    ctx.beginPath();
+    ctx.arc(x + 30, y - 2, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    if (needOutline) {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(x + 22, y, 19, 12, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  function drawBat(o) {
+    const x = o.x;
+    const y = (o.drawY != null ? o.drawY : o.y) + o.h * 0.5;
+    const flap = Math.sin(animT * 16 + (o.t || 0)) * 8;
+    ctx.fillStyle = "#5a1428";
+    ctx.beginPath();
+    ctx.moveTo(x + 18, y - 10);
+    ctx.lineTo(x + 13, y - 20);
+    ctx.lineTo(x + 22, y - 11);
+    ctx.closePath();
+    ctx.moveTo(x + 28, y - 10);
+    ctx.lineTo(x + 33, y - 20);
+    ctx.lineTo(x + 24, y - 11);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#8a1e3a";
+    ctx.beginPath();
+    ctx.moveTo(x + 22, y);
+    ctx.lineTo(x - 4, y - 16 - flap);
+    ctx.lineTo(x + 4, y - 2);
+    ctx.lineTo(x + 2, y + 8);
+    ctx.lineTo(x + 12, y + 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x + 24, y);
+    ctx.lineTo(x + 50, y - 16 + flap);
+    ctx.lineTo(x + 42, y - 2);
+    ctx.lineTo(x + 44, y + 8);
+    ctx.lineTo(x + 34, y + 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#6e1630";
+    ctx.beginPath();
+    ctx.ellipse(x + 23, y + 2, 12, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#c45c4a";
+    ctx.beginPath();
+    ctx.moveTo(x + 32, y + 1);
+    ctx.lineTo(x + 42, y + 3);
+    ctx.lineTo(x + 32, y + 6);
+    ctx.fill();
+    ctx.fillStyle = "#ffe8a0";
+    ctx.beginPath();
+    ctx.arc(x + 27, y - 1, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#2a0810";
+    ctx.beginPath();
+    ctx.arc(x + 28, y - 1, 1.3, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   function drawObstacle(o) {
@@ -1343,20 +1807,10 @@
       }
       ctx.fillStyle = "#ff6b9a";
       ctx.fillRect(r.x, r.y, 4 * dir * dir, r.h);
+    } else if (o.type === "crow") {
+      drawCrow(o);
     } else if (o.type === "bat") {
-      const flap = Math.sin(animT * 14) * 8;
-      ctx.fillStyle = "#2a2038";
-      ctx.beginPath();
-      ctx.ellipse(o.x + 18, o.y + 12, 12, 8, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(o.x + 18, o.y + 12);
-      ctx.quadraticCurveTo(o.x - 4, o.y + 2 - flap, o.x + 6, o.y + 16);
-      ctx.quadraticCurveTo(o.x + 12, o.y + 12, o.x + 18, o.y + 12);
-      ctx.moveTo(o.x + 18, o.y + 12);
-      ctx.quadraticCurveTo(o.x + 40, o.y + 2 + flap, o.x + 30, o.y + 16);
-      ctx.quadraticCurveTo(o.x + 24, o.y + 12, o.x + 18, o.y + 12);
-      ctx.fill();
+      drawBat(o);
     } else if (o.type === "shard") {
       const cx = o.x + o.w * 0.5;
       const cy = o.y + o.h * 0.5 + Math.sin(o.bob || 0) * 5;
@@ -1414,18 +1868,6 @@
       ctx.fillStyle = "#4caf50";
       ctx.beginPath();
       ctx.ellipse(it.x - 4, y - it.r + 2, 6, 4, -0.5, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (it.type === "star") {
-      ctx.fillStyle = "#ffe08a";
-      ctx.beginPath();
-      for (let i = 0; i < 5; i++) {
-        const a = -Math.PI / 2 + i * ((Math.PI * 2) / 5);
-        const r1 = it.r;
-        const r2 = it.r * 0.42;
-        ctx.lineTo(it.x + Math.cos(a) * r1, y + Math.sin(a) * r1);
-        ctx.lineTo(it.x + Math.cos(a + Math.PI / 5) * r2, y + Math.sin(a + Math.PI / 5) * r2);
-      }
-      ctx.closePath();
       ctx.fill();
     } else {
       ctx.fillStyle = "#fff8d0";
@@ -1627,6 +2069,13 @@
         floatTexts[i].y -= 40 * dt;
         if (floatTexts[i].life <= 0) floatTexts.splice(i, 1);
       }
+      for (let i = 0; i < clouds.length; i++) {
+        clouds[i].y += clouds[i].speed * dt * 0.15;
+        if (clouds[i].y > H + 40) {
+          clouds[i].y = -40;
+          clouds[i].x = WALL + 20 + Math.random() * (W - WALL * 2 - 40);
+        }
+      }
     }
     draw();
     requestAnimationFrame(loop);
@@ -1720,9 +2169,10 @@
     sfxEnabled = toggleSfx.checked;
     localStorage.setItem(SFX_KEY, sfxEnabled ? "1" : "0");
   });
-  toggleStars.addEventListener("change", function () {
-    starsEnabled = toggleStars.checked;
-    localStorage.setItem(STARS_KEY, starsEnabled ? "1" : "0");
+  toggleFireworks.addEventListener("change", function () {
+    fireworksEnabled = toggleFireworks.checked;
+    localStorage.setItem(FIREWORKS_KEY, fireworksEnabled ? "1" : "0");
+    if (!fireworksEnabled) fireworks = [];
   });
   bgmModeSelect.addEventListener("change", function () {
     bgmMode = bgmModeSelect.value;
@@ -1730,7 +2180,7 @@
     if (state === "playing") playBgm(true);
   });
   toggleSfx.addEventListener("click", function (e) { e.stopPropagation(); });
-  toggleStars.addEventListener("click", function (e) { e.stopPropagation(); });
+  toggleFireworks.addEventListener("click", function (e) { e.stopPropagation(); });
   bgmModeSelect.addEventListener("click", function (e) { e.stopPropagation(); });
 
   for (let i = 0; i < charButtons.length; i++) {
@@ -1749,7 +2199,7 @@
   }
 
   toggleSfx.checked = sfxEnabled;
-  toggleStars.checked = starsEnabled;
+  toggleFireworks.checked = fireworksEnabled;
   bgmModeSelect.value = bgmMode;
   syncModeSelectUi();
   syncModeRecordsUi();
