@@ -3,7 +3,7 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.19";
+  const APP_VERSION = "2.20";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
@@ -2774,6 +2774,24 @@
 
   const app = document.getElementById("app");
   app.addEventListener("pointerdown", onPointer);
+  app.addEventListener("touchstart", function (e) {
+    if (isInteractiveTarget(e.target)) return;
+    if (e.cancelable) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener("selectstart", function (e) {
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+    e.preventDefault();
+  });
+  document.addEventListener("contextmenu", function (e) {
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+    e.preventDefault();
+  });
+  document.addEventListener("selectionchange", function () {
+    const active = document.activeElement;
+    if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) return;
+    const sel = window.getSelection && window.getSelection();
+    if (sel && sel.rangeCount) sel.removeAllRanges();
+  });
   window.addEventListener("keydown", function (e) {
     if (e.code === "Space" || e.code === "ArrowUp" || e.key === " ") {
       const tag = e.target && e.target.tagName;

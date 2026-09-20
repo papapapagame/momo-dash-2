@@ -18,6 +18,8 @@
   margin: 0;
   padding: 0;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -26,9 +28,22 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
   background: #120c28;
   font-family: "M PLUS Rounded 1c", sans-serif;
   color: var(--ink);
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+  touch-action: manipulation;
 }
 
 #app {
@@ -70,6 +85,9 @@ body {
   padding: 8px 12px;
   pointer-events: none;
   z-index: 2;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .hud-score,
@@ -221,6 +239,10 @@ body {
   background: rgba(255, 246, 255, 0.95);
   box-shadow: 0 4px 12px var(--shadow);
   cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
 }
 
 .debug-exit-btn:active {

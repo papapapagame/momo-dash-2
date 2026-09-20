@@ -2574,5 +2574,11 @@
     versionElTap.addEventListener("touchstart", onVersionTap, { passive: false });
   }
   renderBestScores();
+  document.addEventListener("selectstart", function (e) { e.preventDefault(); });
+  document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  document.addEventListener("selectionchange", function () {
+    const sel = window.getSelection && window.getSelection();
+    if (sel && sel.rangeCount) sel.removeAllRanges();
+  });
   requestAnimationFrame(loop);
 })();
