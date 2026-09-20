@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>はかせでぃうす</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=1.23">
+</head>
+<body>
+  <div id="app">
+    <aside id="rail-left" class="rail">
+      <div class="rail-top hidden" id="lives-box">
+        <div class="hud-lives" id="lives-row"></div>
+        <div id="hud">
+          <div class="hud-score">
+            <span class="hud-label">スコア</span>
+            <span id="score-value">0</span>
+          </div>
+          <div class="hud-best">
+            <span class="hud-label">ベスト</span>
+            <span id="best-value">0</span>
+          </div>
+          <div class="hud-stage">
+            <span class="hud-label">エリア</span>
+            <span id="stage-value">1面</span>
+          </div>
+          <div id="power-bar" class="power-bar" aria-label="装備">
+            <div class="power-slot" data-p="speed">SPEED</div>
+            <div class="power-slot" data-p="missile">MISSILE</div>
+            <div class="power-slot" data-p="double">DOUBLE</div>
+            <div class="power-slot" data-p="laser">LASER</div>
+            <div class="power-slot" data-p="option">OPTION</div>
+            <div class="power-slot" data-p="shield">SHIELD</div>
+            <div class="power-slot" data-p="homing">HOMING</div>
+          </div>
+        </div>
+      </div>
+      <div id="stick-layer" class="hidden" aria-hidden="true">
+        <div id="stick-base">
+          <div id="stick-cross" aria-hidden="true"></div>
+          <div id="stick-knob"></div>
+        </div>
+        <div id="dpad" class="hidden" aria-label="十字キー">
+          <span class="dpad-btn" data-dir="up"></span>
+          <span class="dpad-btn" data-dir="down"></span>
+          <span class="dpad-btn" data-dir="left"></span>
+          <span class="dpad-btn" data-dir="right"></span>
+          <span class="dpad-nub"></span>
+        </div>
+      </div>
+    </aside>
+
+    <div id="stage">
+      <canvas id="game-canvas" width="960" height="540" aria-label="はかせでぃうす"></canvas>
+
+      <div id="title-screen" class="overlay">
+        <div class="panel title-panel">
+          <p class="brand">はかせで<span id="brand-i" class="brand-i">ぃ</span>うす</p>
+          <p class="tagline">
+            金色のティラノではかせが宇宙を駆ける‼<br>
+            左の操作キーで移動、ショットは自動。<br>
+            ノーマルは4面のあとエクストラへ。イージーはラスボス撃破でクリア。
+          </p>
+          <div class="howto">
+            <p>SPEED / MISSILE / DOUBLE / LASER / OPTION / SHIELD / HOMING</p>
+          </div>
+          <p class="best-line">ベスト <span id="title-best">0</span></p>
+          <label class="sound-toggle">
+            <span class="sound-toggle-label">効果音</span>
+            <input id="toggle-sfx" type="checkbox" checked>
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+          <div class="opt-row">
+            <p class="opt-label">難易度</p>
+            <div class="seg" id="opt-easy">
+              <button type="button" data-easy="0">ノーマル</button>
+              <button type="button" data-easy="1">イージー</button>
+            </div>
+          </div>
+          <div class="opt-row">
+            <p class="opt-label">操作</p>
+            <div class="seg" id="opt-pad-mode">
+              <button type="button" data-mode="stick">スティック</button>
+              <button type="button" data-mode="dpad">十字キー</button>
+            </div>
+          </div>
+          <div class="opt-row">
+            <p class="opt-label">キーサイズ</p>
+            <div class="seg" id="opt-pad-size">
+              <button type="button" data-size="s">小</button>
+              <button type="button" data-size="m">中</button>
+              <button type="button" data-size="l">大</button>
+            </div>
+          </div>
+          <button id="btn-start" class="btn primary" type="button">スタート</button>
+          <p class="hint">キーボードは矢印 / WASD　ボムは Z / スペース　スマホは左の操作キーと右ボム</p>
+          <p class="version" id="app-version">Ver.1.23</p>
+        </div>
+      </div>
+
+      <div id="gameover-screen" class="overlay hidden">
+        <div class="panel result-panel">
+          <p class="result-title" id="result-title">ゲームオーバー</p>
+          <p class="result-score">スコア <span id="final-score">0</span></p>
+          <p id="new-best" class="new-best hidden">ベスト更新！</p>
+          <div class="result-actions">
+            <button id="btn-retry" class="btn primary" type="button">もういちど</button>
+            <button id="btn-title" class="btn secondary" type="button">タイトルへ</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="pause-screen" class="overlay hidden">
+        <div class="panel pause-panel">
+          <p class="result-title">一時停止</p>
+          <div class="result-actions">
+            <button id="btn-resume" class="btn primary" type="button">再開</button>
+            <button id="btn-pause-title" class="btn secondary" type="button">タイトルへ</button>
+          </div>
+        </div>
+      </div>
+
+      <button id="btn-debug-title" class="debug-exit-btn hidden" type="button">タイトルへ</button>
+      <div id="debug-badge" class="debug-badge hidden">DEBUG</div>
+    </div>
+
+    <aside id="rail-right" class="rail">
+      <button id="btn-pause" class="pause-btn hidden" type="button" aria-label="一時停止">II</button>
+      <button id="btn-bomb" class="bomb-btn hidden" type="button" aria-label="ボム">
+        <span class="bomb-label">BOMB</span>
+        <span id="bomb-count">1</span>
+      </button>
+    </aside>
+  </div>
+
+  <div id="rotate-hint">
+    <p>画面を横にして遊んでね</p>
+  </div>
+
+  <script src="game.js?v=1.23"></script>
+</body>
+</html>

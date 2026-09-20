@@ -3,7 +3,7 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.14";
+  const APP_VERSION = "2.15";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
@@ -30,11 +30,22 @@
   const HAKASE_UNLOCK_KEY = "momoDash2UnlockHakase";
   const HAMA_UNLOCK_KEY = "momoDash2UnlockHama";
   const BGM_VOLUME = 0.45;
+  const HAKASE_PLAYED_KEY = "momoDash2HakasePlayed";
+  const HAKASE_GAME_URL = "はかせでぃうす/index.html";
   const BGM_TRACKS = [
     { file: "sounds/momo-dash.mp3", label: "ももダッシュ！" },
     { file: "sounds/peach-funky-run.mp3", label: "PEACH FUNKY RUN" },
     { file: "sounds/peach-overdrive.mp3", label: "PEACH OVERDRIVE" },
     { file: "sounds/momo-panic.mp3", label: "もももも☆ぱにっく！！" },
+  ];
+  const HAKASE_BGM_TRACKS = [
+    { value: "h1", file: "はかせでぃうす/audio/stage1.mp3", label: "はかせでぃうす 1面 夜の荒野" },
+    { value: "h2", file: "はかせでぃうす/audio/stage2.mp3", label: "はかせでぃうす 2面 溶岩回廊" },
+    { value: "h3", file: "はかせでぃうす/audio/stage3.mp3", label: "はかせでぃうす 3面 地下遺跡" },
+    { value: "h4", file: "はかせでぃうす/audio/stage4.mp3", label: "はかせでぃうす 4面 でぃうすコア" },
+    { value: "hb", file: "はかせでぃうす/audio/boss.mp3", label: "はかせでぃうす ボス" },
+    { value: "hf", file: "はかせでぃうす/audio/finalboss.mp3", label: "はかせでぃうす ラスボス" },
+    { value: "hx", file: "はかせでぃうす/audio/extra.mp3", label: "はかせでぃうす エクストラ" },
   ];
   const CHAR_IDS = ["night", "comet", "meteor", "luna", "star", "yuzu", "hakase", "hama"];
   const SLOT_SECRET = { night: "hama", comet: "yuzu", meteor: "hakase" };
@@ -155,6 +166,7 @@
   let state = "title";
   let debugMode = false;
   let debugTapCount = 0;
+  let versionSwitchTaps = 0;
   let records = loadRecords();
   let starUnlocked = localStorage.getItem(STAR_UNLOCK_KEY) === "1";
   let unlocks = {
@@ -304,11 +316,75 @@
     return MODE_IDS.indexOf(id) >= 0 ? id : "normal";
   }
 
+  function hakaseUnlocked() {
+    return localStorage.getItem(HAKASE_PLAYED_KEY) === "1";
+  }
+
+  function validBgmModes() {
+    const list = BGM_MODE_VALUES.slice();
+    if (hakaseUnlocked()) {
+      for (let i = 0; i < HAKASE_BGM_TRACKS.length; i++) list.push(HAKASE_BGM_TRACKS[i].value);
+    }
+    return list;
+  }
+
+  function selectableBgmTracks() {
+    const list = [];
+    for (let i = 0; i < BGM_TRACKS.length; i++) {
+      list.push({ value: String(i), file: BGM_TRACKS[i].file, label: BGM_TRACKS[i].label });
+    }
+    if (hakaseUnlocked()) {
+      for (let i = 0; i < HAKASE_BGM_TRACKS.length; i++) list.push(HAKASE_BGM_TRACKS[i]);
+    }
+    return list;
+  }
+
+  function currentPlayList() {
+    if (bgmMode === "sequence") {
+      const list = [];
+      for (let i = 0; i < BGM_TRACKS.length; i++) {
+        list.push({ value: String(i), file: BGM_TRACKS[i].file, label: BGM_TRACKS[i].label });
+      }
+      return list;
+    }
+    if (bgmMode === "random") return selectableBgmTracks();
+    const tracks = selectableBgmTracks();
+    for (let i = 0; i < tracks.length; i++) {
+      if (tracks[i].value === bgmMode) return [tracks[i]];
+    }
+    return tracks.slice(0, 1);
+  }
+
+  function syncBgmSelectOptions() {
+    if (!bgmModeSelect) return;
+    const tracks = selectableBgmTracks();
+    bgmModeSelect.innerHTML = "";
+    for (let i = 0; i < tracks.length; i++) {
+      const opt = document.createElement("option");
+      opt.value = tracks[i].value;
+      opt.textContent = tracks[i].label;
+      bgmModeSelect.appendChild(opt);
+    }
+    const extras = [
+      { value: "sequence", label: "4曲連続" },
+      { value: "random", label: "ランダム（1曲ループ）" },
+      { value: "off", label: "BGMなし" },
+    ];
+    for (let i = 0; i < extras.length; i++) {
+      const opt = document.createElement("option");
+      opt.value = extras[i].value;
+      opt.textContent = extras[i].label;
+      bgmModeSelect.appendChild(opt);
+    }
+    if (validBgmModes().indexOf(bgmMode) < 0) bgmMode = "0";
+    bgmModeSelect.value = bgmMode;
+  }
+
   function loadBgmMode() {
     const id = localStorage.getItem(BGM_MODE_KEY);
     if (id === "moonlight") return "0";
     if (id === "nightdash") return "1";
-    return BGM_MODE_VALUES.indexOf(id) >= 0 ? id : "0";
+    return validBgmModes().indexOf(id) >= 0 ? id : "0";
   }
 
   function loadUserName() {
@@ -747,7 +823,8 @@
       bgm.addEventListener("ended", function () {
         if (bgmMode !== "sequence") return;
         if (state !== "playing" && !bgmPreviewing) return;
-        bgmTrackIndex = (bgmTrackIndex + 1) % BGM_TRACKS.length;
+        const list = currentPlayList();
+        bgmTrackIndex = (bgmTrackIndex + 1) % Math.max(1, list.length);
         loadBgmTrack(bgmTrackIndex, true);
         startBgmPlayback(true);
       });
@@ -756,7 +833,8 @@
   }
 
   function loadBgmTrack(index, shouldLoad) {
-    const track = BGM_TRACKS[index];
+    const list = currentPlayList();
+    const track = list[index];
     if (!track) return;
     const audio = ensureBgm();
     const url = resolveAssetUrl(track.file);
@@ -769,9 +847,8 @@
   function pickTrackIndexForMode() {
     if (bgmMode === "off") return -1;
     if (bgmMode === "sequence") return 0;
-    if (bgmMode === "random") return (Math.random() * BGM_TRACKS.length) | 0;
-    const n = Number(bgmMode);
-    if (n >= 0 && n < BGM_TRACKS.length) return n;
+    const list = currentPlayList();
+    if (bgmMode === "random") return (Math.random() * list.length) | 0;
     return 0;
   }
 
@@ -865,7 +942,7 @@
   }
 
   function setBgmMode(mode) {
-    if (BGM_MODE_VALUES.indexOf(mode) === -1) mode = "0";
+    if (validBgmModes().indexOf(mode) === -1) mode = "0";
     bgmMode = mode;
     localStorage.setItem(BGM_MODE_KEY, bgmMode);
     if (bgmModeSelect) bgmModeSelect.value = bgmMode;
@@ -1009,6 +1086,7 @@
     state = "title";
     debugMode = false;
     debugTapCount = 0;
+    versionSwitchTaps = 0;
     hideNameRegister();
     titleScreen.classList.remove("hidden");
     gameoverScreen.classList.add("hidden");
@@ -1138,6 +1216,22 @@
       brandTwo.classList.add("brand-two-pop");
     }
     if (debugTapCount >= DEBUG_TAPS_NEEDED) requestStartGame(true);
+  }
+
+  function handleVersionSwitchTap() {
+    if (state !== "title" || isNameRegisterOpen()) return;
+    versionSwitchTaps += 1;
+    const versionEl = document.getElementById("app-version");
+    if (versionEl) {
+      versionEl.classList.remove("version-pop");
+      void versionEl.offsetWidth;
+      versionEl.classList.add("version-pop");
+    }
+    if (versionSwitchTaps >= DEBUG_TAPS_NEEDED) {
+      versionSwitchTaps = 0;
+      stopBgm();
+      window.location.href = new URL(HAKASE_GAME_URL, window.location.href).href;
+    }
   }
 
   function difficultyFactor() {
@@ -2626,6 +2720,20 @@
       handleDebugTitleTap();
     });
   }
+  const versionElTap = document.getElementById("app-version");
+  if (versionElTap) {
+    let lastVersionTap = 0;
+    const onVersionTap = function (e) {
+      e.stopPropagation();
+      if (e.cancelable) e.preventDefault();
+      const now = performance.now();
+      if (now - lastVersionTap < 280) return;
+      lastVersionTap = now;
+      handleVersionSwitchTap();
+    };
+    versionElTap.addEventListener("pointerdown", onVersionTap);
+    versionElTap.addEventListener("touchstart", onVersionTap, { passive: false });
+  }
 
   btnStart.addEventListener("click", function (e) {
     e.stopPropagation();
@@ -2723,7 +2831,7 @@
 
   toggleSfx.checked = sfxEnabled;
   toggleFireworks.checked = fireworksEnabled;
-  bgmModeSelect.value = bgmMode;
+  syncBgmSelectOptions();
   syncBgmPreviewButton();
   syncModeSelectUi();
   syncModeRecordsUi();
