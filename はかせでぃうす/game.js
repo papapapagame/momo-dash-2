@@ -3,7 +3,7 @@
 
   const W = 960;
   const H = 540;
-  const APP_VERSION = "1.27";
+  const APP_VERSION = "1.29";
   const HAKASE_PLAYED_KEY = "momoDash2HakasePlayed";
   const MOMO_GAME_URL = "../index.html";
   const BEST_KEY = "hakaseDeusBest";
@@ -144,7 +144,7 @@
   let bgmFade = 0;
   let bgmFadeMax = 1;
   let bgmRetryT = 0;
-  const bgmPool = {};
+  let bgmNeedGesture = false;
   let bossWarn = null;
   let bossTheme = false;
   let extraIntro = null;
@@ -447,6 +447,17 @@
     return "";
   }
 
+  function ensureBgmEl() {
+    if (bgm) return bgm;
+    bgm = new Audio();
+    bgm.loop = true;
+    bgm.preload = "auto";
+    bgm.playsInline = true;
+    try { bgm.setAttribute("playsinline", "true"); } catch (err) {}
+    bindBgmLoop(bgm);
+    return bgm;
+  }
+
   function bindBgmLoop(audio) {
     if (!audio || audio._loopBound) return;
     audio._loopBound = true;
@@ -460,18 +471,24 @@
     if (!audio || audio !== bgm) return;
     audio.loop = true;
     try { audio.currentTime = 0; } catch (err) {}
-    const play = audio.play();
-    if (play && play.catch) play.catch(function () {});
+    playBgmEl();
   }
 
-  function makeBgm(src) {
-    if (bgmPool[src]) return bgmPool[src];
-    const audio = new Audio(src);
-    audio.preload = "auto";
-    audio.loop = true;
-    bindBgmLoop(audio);
-    bgmPool[src] = audio;
-    return audio;
+  function playBgmEl() {
+    if (!bgm) return;
+    const play = bgm.play();
+    if (play && play.then) {
+      play.then(function () {
+        bgmNeedGesture = false;
+      }).catch(function () {
+        bgmNeedGesture = true;
+      });
+    }
+  }
+
+  function kickBgm() {
+    if (state !== "playing" || paused || !sfxOn) return;
+    if (bgmNeedGesture || (bgm && bgm.paused && bgmSrc)) syncBgm();
   }
 
   function stopBgm() {
@@ -479,13 +496,12 @@
       bgm.pause();
       try { bgm.currentTime = 0; } catch (err) {}
     }
-    bgm = null;
     bgmSrc = "";
     bgmFade = 0;
   }
 
   function fadeBgmOut(dur) {
-    if (!bgm) {
+    if (!bgm || !bgmSrc) {
       bgmFade = 0;
       return;
     }
@@ -506,7 +522,6 @@
         bgm.pause();
         try { bgm.currentTime = 0; } catch (err) {}
       }
-      bgm = null;
       bgmSrc = "";
       syncBgm();
     }
@@ -515,25 +530,24 @@
   function syncBgm() {
     if (bgmFade > 0 || bossWarn) return;
     const src = wantedBgm();
+    ensureBgmEl();
     if (!src) {
       stopBgm();
       return;
     }
-    if (!bgm || bgmSrc !== src) {
-      if (bgm) {
-        bgm.pause();
-        try { bgm.currentTime = 0; } catch (err) {}
-      }
-      bgm = makeBgm(src);
+    if (bgmSrc !== src) {
+      bgm.pause();
       bgmSrc = src;
+      bgm.src = src;
+      bgm.loop = true;
     }
     bgm.loop = true;
+    bgm.muted = false;
     bgm.volume = BGM_VOL;
     if (bgm.ended) {
       try { bgm.currentTime = 0; } catch (err) {}
     }
-    const play = bgm.play();
-    if (play && play.catch) play.catch(function () {});
+    playBgmEl();
   }
 
   function keepBgmAlive(dt) {
@@ -542,7 +556,7 @@
     const src = wantedBgm();
     if (!src) return;
     bgmRetryT -= dt;
-    const dead = !bgm || bgmSrc !== src || bgm.paused || bgm.ended;
+    const dead = !bgmSrc || bgmSrc !== src || !bgm || bgm.paused || bgm.ended;
     if (!dead) return;
     if (bgmRetryT > 0) return;
     bgmRetryT = 0.8;
@@ -1075,6 +1089,7 @@
       feedCheat("B");
       return;
     }
+    kickBgm();
     if (state !== "playing") return;
     if ((player.bombs || 0) <= 0) return;
     player.bombs -= 1;
@@ -1371,6 +1386,7 @@
     if (controlMode === "dpad") setDpadFromEvent(ev);
     else setStickFrom((ev.clientX - stick.ox) / stick.scale, (ev.clientY - stick.oy) / stick.scale);
     noteCheatPad();
+    kickBgm();
     try { railLeft.setPointerCapture(ev.pointerId); } catch (err) {}
     ev.preventDefault();
   }
@@ -1402,6 +1418,7 @@
       return;
     }
     if (paused) noteCheatPad();
+    else kickBgm();
     if (!ev.repeat && (ev.code === "KeyZ" || ev.code === "KeyB" || ev.code === "Space")) useBomb();
   });
   window.addEventListener("keyup", function (ev) {
@@ -2401,8 +2418,7 @@
       cheatLastDir = "";
       if (bgm) bgm.pause();
     } else if (bgm && sfxOn && bgmSrc) {
-      const play = bgm.play();
-      if (play && play.catch) play.catch(function () {});
+      playBgmEl();
     }
     syncCheatFlash();
   }
@@ -2445,10 +2461,11 @@
   function startGame(asDebug) {
     localStorage.setItem(HAKASE_PLAYED_KEY, "1");
     ensureAudio();
+    ensureBgmEl();
     debugMode = !!asDebug;
     debugTapCount = 0;
-    resetRun();
     state = "playing";
+    resetRun();
     titleScreen.classList.add("hidden");
     gameoverScreen.classList.add("hidden");
     hud.classList.remove("hidden");
@@ -2549,6 +2566,25 @@
   }
   applyControlSettings();
 
+  window.addEventListener("contextmenu", function (ev) {
+    ev.preventDefault();
+  });
+  window.addEventListener("selectstart", function (ev) {
+    ev.preventDefault();
+  });
+  window.addEventListener("dragstart", function (ev) {
+    ev.preventDefault();
+  });
+  function isUiControl(el) {
+    return !!(el && el.closest && el.closest("button, input, textarea, label, a, .seg"));
+  }
+  function blockCallout(ev) {
+    if (isUiControl(ev.target)) return;
+    ev.preventDefault();
+  }
+  document.addEventListener("touchstart", blockCallout, { passive: false });
+  document.addEventListener("touchmove", blockCallout, { passive: false });
+
   document.getElementById("app-version").textContent = "Ver." + APP_VERSION;
   const versionElTap = document.getElementById("app-version");
   if (versionElTap) {
@@ -2574,11 +2610,5 @@
     versionElTap.addEventListener("touchstart", onVersionTap, { passive: false });
   }
   renderBestScores();
-  document.addEventListener("selectstart", function (e) { e.preventDefault(); });
-  document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
-  document.addEventListener("selectionchange", function () {
-    const sel = window.getSelection && window.getSelection();
-    if (sel && sel.rangeCount) sel.removeAllRanges();
-  });
   requestAnimationFrame(loop);
 })();
