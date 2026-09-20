@@ -3,7 +3,7 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.13";
+  const APP_VERSION = "2.14";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
@@ -26,6 +26,9 @@
   const CHAR_KEY = "momoDash2Char";
   const USER_KEY = "momoDash2UserName";
   const STAR_UNLOCK_KEY = "momoDash2StarUnlock";
+  const YUZU_UNLOCK_KEY = "momoDash2UnlockYuzu";
+  const HAKASE_UNLOCK_KEY = "momoDash2UnlockHakase";
+  const HAMA_UNLOCK_KEY = "momoDash2UnlockHama";
   const BGM_VOLUME = 0.45;
   const BGM_TRACKS = [
     { file: "sounds/momo-dash.mp3", label: "ももダッシュ！" },
@@ -33,14 +36,20 @@
     { file: "sounds/peach-overdrive.mp3", label: "PEACH OVERDRIVE" },
     { file: "sounds/momo-panic.mp3", label: "もももも☆ぱにっく！！" },
   ];
-  const CHAR_IDS = ["night", "comet", "meteor", "luna", "star"];
+  const CHAR_IDS = ["night", "comet", "meteor", "luna", "star", "yuzu", "hakase", "hama"];
+  const SLOT_SECRET = { night: "hama", comet: "yuzu", meteor: "hakase" };
+  const CHAR_UNLOCK_SEQ = {
+    yuzu: ["night", "night", "night", "meteor", "meteor", "meteor", "meteor", "luna", "luna", "luna", "luna", "luna"],
+    hakase: ["night", "night", "night", "comet", "comet", "comet", "comet", "luna", "luna", "luna", "luna", "luna"],
+    hama: ["luna", "luna", "luna", "comet", "comet", "comet", "comet", "meteor", "meteor", "meteor", "meteor", "meteor"],
+  };
   const MODE_IDS = ["easy", "normal", "hard"];
   const BGM_MODE_VALUES = ["0", "1", "2", "3", "sequence", "random", "off"];
   const CHARACTERS = {
     night: {
       id: "night",
       name: "ノーマル桃",
-      desc: "1度だけ障害物への接触を我慢できる。距離スコアが少し多め。羽を取るとジャンプ中に引き返しを1回ストック（最大2）。",
+      desc: "最初から1回無敵。桃3つで無敵1回（先に使う）。羽を取ると引き返しをストック（最大2）し、上から桃が2つ降ってくる。",
       distMult: 1.2,
       moonGain: 1,
       canReverse: false,
@@ -48,24 +57,24 @@
     comet: {
       id: "comet",
       name: "コメット桃",
-      desc: "ジャンプ中に通路のカラスや蝙蝠、月のかけらを彗星のように吹き飛ばしてスコアにする！羽を取ると引き返しを1回ストック（最大2）。",
+      desc: "ジャンプ中に1回だけ切り返せる。羽を取ると、そのあと1度だけカラスや蝙蝠を倒せる（ストック不可）。羽が無いと倒せない。",
       distMult: 0.85,
       moonGain: 1,
-      canReverse: false,
+      canReverse: true,
     },
     meteor: {
       id: "meteor",
       name: "メテオ桃",
-      desc: "着壁の衝撃で、その壁の近くのトゲを破壊してスコアにする！羽を取ると引き返しを1回ストック（最大2）。",
+      desc: "ジャンプ中に1回だけ切り返せる。羽を取るとトゲを1度だけ無効化できる。羽が無いとトゲは通常どおり痛い。",
       distMult: 0.85,
       moonGain: 1,
-      canReverse: false,
+      canReverse: true,
     },
     luna: {
       id: "luna",
       name: "ルナ桃",
-      desc: "ジャンプがとてもゆっくりで、ジャンプ中は何度でもタップで切り返せる。羽を取るとレーザーを1度無効化できる。スコアの伸びは遅め。",
-      distMult: 0.65,
+      desc: "ジャンプがとてもゆっくりで、ジャンプ中は何度でも切り返せる。羽を取ったあと、次の切り返しで前方3方向に羽を飛ばして敵を壊す。",
+      distMult: 0.85,
       moonGain: 1.2,
       canReverse: true,
     },
@@ -76,6 +85,30 @@
       distMult: 1.15,
       moonGain: 1.6,
       canReverse: true,
+    },
+    yuzu: {
+      id: "yuzu",
+      name: "ゆずりんご",
+      desc: "白いねこ。ジャンプ中に1回切り返せる。羽1つでカラス・蝙蝠を2回倒せる（最大2回分）。5体倒すと無敵1回（最大1。桃の無敵より先に使う）。",
+      distMult: 0.85,
+      moonGain: 1,
+      canReverse: true,
+    },
+    hakase: {
+      id: "hakase",
+      name: "はかせ",
+      desc: "金のティラノ。ジャンプ中に1回切り返せる。羽1つでトゲを2回壊せる（最大2回分）。5個壊すと、張り付いている壁と反対側の前方3方向に火の玉を撃つ。",
+      distMult: 0.85,
+      moonGain: 1,
+      canReverse: true,
+    },
+    hama: {
+      id: "hama",
+      name: "はまさん",
+      desc: "ノーマル桃と同じ基本性能。桃3つで無敵に加え、自分から広がる衝撃波で画面上の障害物を破壊する。",
+      distMult: 1.2,
+      moonGain: 1,
+      canReverse: false,
     },
   };
 
@@ -124,6 +157,12 @@
   let debugTapCount = 0;
   let records = loadRecords();
   let starUnlocked = localStorage.getItem(STAR_UNLOCK_KEY) === "1";
+  let unlocks = {
+    yuzu: localStorage.getItem(YUZU_UNLOCK_KEY) === "1",
+    hakase: localStorage.getItem(HAKASE_UNLOCK_KEY) === "1",
+    hama: localStorage.getItem(HAMA_UNLOCK_KEY) === "1",
+  };
+  let charUnlockProgress = { yuzu: 0, hakase: 0, hama: 0 };
   let bgmMode = loadBgmMode();
   let sfxEnabled = localStorage.getItem(SFX_KEY) !== "0";
   let fireworksEnabled = localStorage.getItem(FIREWORKS_KEY) !== "0";
@@ -132,6 +171,11 @@
   let selectedCharId = loadSelectedChar();
   let selectedMode = loadSelectedMode();
   let secretTap = { count: 0 };
+  let slotChoice = {
+    night: selectedCharId === "night" ? "night" : (localStorage.getItem(HAMA_UNLOCK_KEY) === "1" ? "hama" : "night"),
+    comet: selectedCharId === "comet" ? "comet" : (localStorage.getItem(YUZU_UNLOCK_KEY) === "1" ? "yuzu" : "comet"),
+    meteor: selectedCharId === "meteor" ? "meteor" : (localStorage.getItem(HAKASE_UNLOCK_KEY) === "1" ? "hakase" : "meteor"),
+  };
 
   let score = 0;
   let distance = 0;
@@ -164,6 +208,8 @@
   let particles = [];
   let floatTexts = [];
   let trails = [];
+  let shots = [];
+  let shockwaves = [];
   let windows = [];
 
   let audioCtx = null;
@@ -190,6 +236,14 @@
     peachStreak: 0,
     peachGuard: 0,
     laserGuard: 0,
+    featherSmash: 0,
+    flyerSmash: 0,
+    flyerKills: 0,
+    killGuard: 0,
+    spikeGuard: 0,
+    spikeBreak: 0,
+    spikeBreaks: 0,
+    triShotArmed: false,
     invuln: 0,
     spinAngle: 0,
   };
@@ -239,6 +293,9 @@
   function loadSelectedChar() {
     const id = localStorage.getItem(CHAR_KEY);
     if (id === "star" && localStorage.getItem(STAR_UNLOCK_KEY) !== "1") return "night";
+    if (id === "yuzu" && localStorage.getItem(YUZU_UNLOCK_KEY) !== "1") return "night";
+    if (id === "hakase" && localStorage.getItem(HAKASE_UNLOCK_KEY) !== "1") return "night";
+    if (id === "hama" && localStorage.getItem(HAMA_UNLOCK_KEY) !== "1") return "night";
     return CHAR_IDS.indexOf(id) >= 0 ? id : "night";
   }
 
@@ -289,6 +346,10 @@
 
   function setSelectedChar(id) {
     if (id === "star" && !starUnlocked) return;
+    if (id === "yuzu" && !unlocks.yuzu) return;
+    if (id === "hakase" && !unlocks.hakase) return;
+    if (id === "hama" && !unlocks.hama) return;
+    if (CHAR_IDS.indexOf(id) < 0) return;
     selectedCharId = id;
     localStorage.setItem(CHAR_KEY, id);
     syncCharSelectUi();
@@ -343,14 +404,82 @@
     if (hardEl) hardEl.textContent = String(rec.hard || 0);
   }
 
+  function displayIdForSlot(baseId) {
+    if (baseId === "star") return "star";
+    const secret = SLOT_SECRET[baseId];
+    if (secret && unlocks[secret]) return slotChoice[baseId] || secret;
+    return baseId;
+  }
+
+  function handleCharSlotClick(baseId) {
+    if (baseId === "star") {
+      setSelectedChar("star");
+      return;
+    }
+    const unlockedNow = handleCharSecretTap(baseId);
+    if (unlockedNow) {
+      let slotBase = baseId;
+      if (unlockedNow === "yuzu") slotBase = "comet";
+      else if (unlockedNow === "hakase") slotBase = "meteor";
+      else if (unlockedNow === "hama") slotBase = "night";
+      slotChoice[slotBase] = unlockedNow;
+      setSelectedChar(unlockedNow);
+      spawnFloatText(W * 0.5, 120, CHARACTERS[unlockedNow].name + " 解除！", "#ffd24a");
+      sfxPeach();
+      return;
+    }
+    const secret = SLOT_SECRET[baseId];
+    if (secret && unlocks[secret]) {
+      const next = displayIdForSlot(baseId) === secret ? baseId : secret;
+      slotChoice[baseId] = next;
+      setSelectedChar(next);
+    } else {
+      setSelectedChar(baseId);
+    }
+  }
+
   function syncCharSelectUi() {
     if (charBtnStar) charBtnStar.classList.toggle("hidden", !starUnlocked);
     for (let i = 0; i < charButtons.length; i++) {
-      const id = charButtons[i].getAttribute("data-char");
-      charButtons[i].setAttribute("aria-pressed", id === selectedCharId ? "true" : "false");
+      const baseId = charButtons[i].getAttribute("data-char");
+      if (baseId === "star") {
+        charButtons[i].setAttribute("aria-pressed", selectedCharId === "star" ? "true" : "false");
+        continue;
+      }
+      const showId = displayIdForSlot(baseId);
+      const ch = CHARACTERS[showId] || CHARACTERS.night;
+      charButtons[i].setAttribute("aria-pressed", showId === selectedCharId ? "true" : "false");
+      const swatch = charButtons[i].querySelector(".char-swatch");
+      const nameEl = charButtons[i].querySelector(".char-name");
+      if (swatch) swatch.className = "char-swatch char-swatch-" + showId;
+      if (nameEl) nameEl.textContent = ch.name;
     }
     if (charDescEl) charDescEl.textContent = currentChar().desc;
     syncCharRecordsUi();
+  }
+
+  function handleCharSecretTap(baseId) {
+    let unlockedId = null;
+    const keys = ["yuzu", "hakase", "hama"];
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      if (unlocks[key]) continue;
+      const seq = CHAR_UNLOCK_SEQ[key];
+      const p = charUnlockProgress[key];
+      if (seq[p] === baseId) {
+        charUnlockProgress[key] = p + 1;
+        if (charUnlockProgress[key] >= seq.length) {
+          unlocks[key] = true;
+          charUnlockProgress[key] = 0;
+          const storageKey = key === "yuzu" ? YUZU_UNLOCK_KEY : key === "hakase" ? HAKASE_UNLOCK_KEY : HAMA_UNLOCK_KEY;
+          localStorage.setItem(storageKey, "1");
+          unlockedId = key;
+        }
+      } else {
+        charUnlockProgress[key] = seq[0] === baseId ? 1 : 0;
+      }
+    }
+    return unlockedId;
   }
 
   function handleSecretModeTap(modeId) {
@@ -413,11 +542,15 @@
   function syncStatusHud() {
     const label = statusHud && statusHud.querySelector(".status-label");
     const parts = [];
-    if (selectedCharId !== "luna" && player.reverses > 0) parts.push("引き返し×" + player.reverses);
-    if (player.laserGuard > 0) parts.push("レーザー無効×" + player.laserGuard);
-    if (player.shield > 0) parts.push("ガード");
+    if (selectedCharId !== "luna" && player.reverses > 0) parts.push("切り返し×" + player.reverses);
+    if (player.featherSmash > 0) parts.push("撃破");
+    if (player.flyerSmash > 0) parts.push("撃破×" + player.flyerSmash);
+    if (player.spikeGuard > 0) parts.push("トゲ無効");
+    if (player.spikeBreak > 0) parts.push("トゲ破壊×" + player.spikeBreak);
+    if (player.triShotArmed) parts.push("3方向羽");
+    if (player.killGuard > 0) parts.push("撃破無敵");
     if (player.peachGuard > 0) parts.push("無敵×" + player.peachGuard);
-    if (selectedCharId === "meteor") parts.push("着壁破壊");
+    if (player.shield > 0) parts.push("ガード");
     if (label) label.textContent = parts.join(" ");
     if (statusHud) statusHud.classList.toggle("hidden", parts.length === 0 || state !== "playing");
     if (state !== "playing" && statusHud) statusHud.classList.add("hidden");
@@ -764,7 +897,7 @@
 
   function resetReverses() {
     if (selectedCharId === "luna") return;
-    if (selectedCharId === "star") {
+    if (selectedCharId === "star" || selectedCharId === "comet" || selectedCharId === "meteor" || selectedCharId === "yuzu" || selectedCharId === "hakase") {
       player.reverses = Math.min(2, Math.max(player.reverses, 1));
     }
   }
@@ -785,6 +918,8 @@
     particles = [];
     floatTexts = [];
     trails = [];
+    shots = [];
+    shockwaves = [];
     shootingStars = [];
     fireworks = [];
     shootTimer = 0;
@@ -803,12 +938,20 @@
     player.dashT = 0;
     player.squish = 1;
     player.blink = 0;
-    player.shield = selectedCharId === "night" ? 1 : 0;
+    player.shield = (selectedCharId === "night" || selectedCharId === "hama") ? 1 : 0;
     player.feather = false;
     player.reverses = 0;
     player.peachStreak = 0;
     player.peachGuard = 0;
     player.laserGuard = 0;
+    player.featherSmash = 0;
+    player.flyerSmash = 0;
+    player.flyerKills = 0;
+    player.killGuard = 0;
+    player.spikeGuard = 0;
+    player.spikeBreak = 0;
+    player.spikeBreaks = 0;
+    player.triShotArmed = false;
     player.invuln = 0;
     player.spinAngle = 0;
     resetReverses();
@@ -949,7 +1092,11 @@
     player.squish = 1.25;
     syncStatusHud();
     sfxDash();
-    spawnFloatText(player.x, player.y - 28, "引き返し！", "#c49cff");
+    if (selectedCharId === "luna" && player.triShotArmed) {
+      player.triShotArmed = false;
+      spawnTriShots("feather", player.targetSide === "right" ? 1 : -1);
+      syncStatusHud();
+    }
   }
 
   function land() {
@@ -963,7 +1110,6 @@
     addMoon(2);
     resetReverses();
     syncStatusHud();
-    if (selectedCharId === "meteor") smashSpikesNearLanding();
   }
 
   function tryAction() {
@@ -1157,6 +1303,71 @@
     });
   }
 
+  function peachesNeeded() {
+    return (selectedCharId === "night" || selectedCharId === "hama") ? 3 : 5;
+  }
+
+  function spawnFallingPeaches(n) {
+    for (let i = 0; i < n; i++) {
+      items.push({
+        type: "peach",
+        x: WALL + 40 + Math.random() * (W - WALL * 2 - 80),
+        y: -24 - i * 36,
+        r: 16,
+        bob: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  function spawnTriShots(kind, dir) {
+    const spd = kind === "fire" ? 460 : 420;
+    const angs = [-0.5, 0, 0.5];
+    for (let i = 0; i < angs.length; i++) {
+      shots.push({
+        kind: kind,
+        x: player.x,
+        y: player.y,
+        vx: Math.cos(angs[i]) * spd * dir,
+        vy: Math.sin(angs[i]) * spd,
+        r: kind === "fire" ? 11 : 9,
+        life: 1.8,
+      });
+    }
+  }
+
+  function onYuzuKill() {
+    player.flyerKills += 1;
+    if (player.flyerKills >= 5) {
+      if (player.killGuard < 1) {
+        player.flyerKills = 0;
+        player.killGuard = 1;
+        spawnFloatText(player.x, player.y - 40, "撃破無敵！", "#fff4d0");
+      } else {
+        player.flyerKills = 5;
+      }
+    }
+    syncStatusHud();
+  }
+
+  function onHakaseSpikeBreak() {
+    player.spikeBreaks += 1;
+    if (player.spikeBreaks >= 5) {
+      player.spikeBreaks = 0;
+      const dir = (player.dashing ? player.targetSide : player.side) === "left" ? 1 : -1;
+      spawnTriShots("fire", dir);
+      spawnFloatText(player.x, player.y - 40, "火の玉！", "#ff8a3a");
+    }
+    syncStatusHud();
+  }
+
+  function triggerHamaExplosion() {
+    shockwaves.push({ x: player.x, y: player.y, r: 12, max: 280, life: 0.45 });
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      destroyObstacle(obstacles[i], SMASH_SCORE, "#ffb070");
+    }
+    spawnBurst(player.x, player.y, "#ff8a3a", 28);
+  }
+
   function collectItem(item) {
     bumpCombo();
     const mult = comboMult() * (moonlight > 0 ? 2 : 1);
@@ -1166,20 +1377,29 @@
       spawnFloatText(item.x, item.y - 20, "+" + gained, "#e85a7a");
       addMoon(10);
       player.peachStreak += 1;
-      if (player.peachStreak >= 5) {
+      if (player.peachStreak >= peachesNeeded()) {
         player.peachStreak = 0;
         player.peachGuard += 1;
         spawnFloatText(item.x, item.y - 42, "無敵！", "#ffe08a");
+        if (selectedCharId === "hama") triggerHamaExplosion();
         syncStatusHud();
       }
       sfxPeach();
     } else {
       player.feather = true;
       if (selectedCharId === "luna") {
-        player.laserGuard += 1;
-        spawnFloatText(item.x, item.y - 42, "レーザー無効", "#ffd0e8");
+        player.triShotArmed = true;
+      } else if (selectedCharId === "comet") {
+        player.featherSmash = 1;
+      } else if (selectedCharId === "meteor") {
+        player.spikeGuard = 1;
+      } else if (selectedCharId === "yuzu") {
+        player.flyerSmash = Math.min(2, player.flyerSmash + 2);
+      } else if (selectedCharId === "hakase") {
+        player.spikeBreak = Math.min(2, player.spikeBreak + 2);
       } else {
         player.reverses = Math.min(2, player.reverses + 1);
+        if (selectedCharId === "night" || selectedCharId === "hama") spawnFallingPeaches(2);
       }
       const gained = addScore(FEATHER_BONUS * comboMult());
       spawnBurst(item.x, item.y, "#fff8d0", 12);
@@ -1292,7 +1512,12 @@
 
   function canSmashCenter(o) {
     if (o.type === "spike" || o.type === "beam") return false;
-    return player.dashing && (selectedCharId === "comet" || moonlight > 0);
+    if (!player.dashing) return false;
+    if (moonlight > 0) return true;
+    if (o.type !== "crow" && o.type !== "bat") return false;
+    if (selectedCharId === "comet") return player.featherSmash > 0;
+    if (selectedCharId === "yuzu") return player.flyerSmash > 0;
+    return false;
   }
 
   function triggerGuard(text, color) {
@@ -1306,22 +1531,34 @@
   }
 
   function consumeHitGuard(o) {
-    if (o.type === "beam" && player.laserGuard > 0) {
-      player.laserGuard -= 1;
-      triggerGuard("レーザー無効！", "#ffd0e8");
-      destroyObstacle(o, 0, "#ffd0e8");
+    if (o.type === "spike" && selectedCharId === "meteor" && player.spikeGuard > 0) {
+      player.spikeGuard -= 1;
+      triggerGuard("トゲ無効！", "#e07040");
+      destroyObstacle(o, 0, "#e07040");
       return true;
     }
-    if (player.shield > 0) {
-      player.shield -= 1;
-      triggerGuard("ガード！", "#7a5ab0");
-      if (o.type === "beam") destroyObstacle(o, 0, "#7a5ab0");
+    if (o.type === "spike" && selectedCharId === "hakase" && player.spikeBreak > 0) {
+      player.spikeBreak -= 1;
+      destroyObstacle(o, SMASH_SCORE, "#e8c040");
+      onHakaseSpikeBreak();
+      return true;
+    }
+    if (player.killGuard > 0) {
+      player.killGuard -= 1;
+      triggerGuard("撃破無敵！", "#fff4d0");
+      if (o.type === "beam") destroyObstacle(o, 0, "#fff4d0");
       return true;
     }
     if (player.peachGuard > 0) {
       player.peachGuard -= 1;
       triggerGuard("無敵！", "#ff8fab");
       if (o.type === "beam") destroyObstacle(o, 0, "#ff8fab");
+      return true;
+    }
+    if (player.shield > 0) {
+      player.shield -= 1;
+      triggerGuard("ガード！", "#7a5ab0");
+      if (o.type === "beam") destroyObstacle(o, 0, "#7a5ab0");
       return true;
     }
     return false;
@@ -1336,6 +1573,12 @@
     }
     if (canSmashCenter(o)) {
       destroyObstacle(o, SMASH_SCORE, "#3a9fd0");
+      if (selectedCharId === "comet") player.featherSmash = 0;
+      if (selectedCharId === "yuzu" && (o.type === "crow" || o.type === "bat")) {
+        player.flyerSmash = Math.max(0, player.flyerSmash - 1);
+        onYuzuKill();
+      }
+      syncStatusHud();
       return "ok";
     }
     if (consumeHitGuard(o)) return "ok";
@@ -1444,6 +1687,37 @@
         collectItem(it);
         items.splice(i, 1);
       }
+    }
+
+    for (let i = shots.length - 1; i >= 0; i--) {
+      const sh = shots[i];
+      sh.x += sh.vx * dt;
+      sh.y += sh.vy * dt;
+      sh.life -= dt;
+      if (sh.life <= 0 || sh.x < -40 || sh.x > W + 40 || sh.y < -40 || sh.y > H + 40) {
+        shots.splice(i, 1);
+        continue;
+      }
+      let hit = false;
+      for (let j = obstacles.length - 1; j >= 0; j--) {
+        const o = obstacles[j];
+        const c = obstacleCenter(o);
+        const rr = sh.r + Math.max(o.w || 20, o.h || 20) * 0.35;
+        const dxs = sh.x - c.x;
+        const dys = sh.y - c.y;
+        if (dxs * dxs + dys * dys < rr * rr) {
+          destroyObstacle(o, SMASH_SCORE, sh.kind === "fire" ? "#ff8a3a" : "#fff0b0");
+          hit = true;
+          break;
+        }
+      }
+      if (hit) shots.splice(i, 1);
+    }
+
+    for (let i = shockwaves.length - 1; i >= 0; i--) {
+      shockwaves[i].r += 520 * dt;
+      shockwaves[i].life -= dt;
+      if (shockwaves[i].life <= 0) shockwaves.splice(i, 1);
     }
 
     for (let i = obstacles.length - 1; i >= 0; i--) {
@@ -2055,6 +2329,9 @@
       meteor: { a: "#ffd0b0", b: "#e07040", c: "#8a3020", cleft: "rgba(80, 20, 10, 0.4)", leg: "#8a3020" },
       luna: { a: "#ffffff", b: "#f4f0ff", c: "#d0c8f0", cleft: "rgba(120, 110, 180, 0.4)", leg: "#b0a8d0" },
       star: { a: "#fff4c0", b: "#ffb0d0", c: "#c070e0", cleft: "rgba(160, 80, 140, 0.4)", leg: "#c070e0" },
+      yuzu: { a: "#ffffff", b: "#f4f0e8", c: "#d8d0c8", cleft: "rgba(120, 110, 100, 0.35)", leg: "#c8c0b8" },
+      hakase: { a: "#ffe9a0", b: "#e8c040", c: "#b8860b", cleft: "rgba(120, 80, 10, 0.4)", leg: "#8a6010" },
+      hama: { a: "#5a5a62", b: "#2a2a30", c: "#121216", cleft: "rgba(80, 20, 20, 0.4)", leg: "#3a1010" },
     };
     const pal = palettes[selectedCharId] || palettes.night;
     const charId = selectedCharId;
@@ -2105,6 +2382,38 @@
       }
     }
 
+    if (charId === "yuzu") {
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.55, -r * 0.7);
+      ctx.lineTo(-r * 0.15, -r * 1.15);
+      ctx.lineTo(-r * 0.05, -r * 0.55);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(r * 0.55, -r * 0.7);
+      ctx.lineTo(r * 0.15, -r * 1.15);
+      ctx.lineTo(r * 0.05, -r * 0.55);
+      ctx.fill();
+      ctx.strokeStyle = "#e8ddd0";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(r * 0.7, 6);
+      ctx.quadraticCurveTo(r * 1.4, 16, r * 0.9, 22);
+      ctx.stroke();
+    }
+    if (charId === "hama") {
+      ctx.strokeStyle = "#c45c20";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, -r);
+      ctx.quadraticCurveTo(8, -r - 10, 4, -r - 16);
+      ctx.stroke();
+      ctx.fillStyle = "#ffd24a";
+      ctx.beginPath();
+      ctx.arc(4, -r - 16, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     const body = ctx.createRadialGradient(-8, -10, 4, 0, 0, r);
     body.addColorStop(0, pal.a);
     body.addColorStop(0.55, pal.b);
@@ -2123,6 +2432,26 @@
     } else {
       ctx.beginPath();
       ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (charId === "hakase") {
+      ctx.fillStyle = "#e8c040";
+      ctx.beginPath();
+      ctx.ellipse(r * 0.82, 2, r * 0.72, r * 0.38, 0.12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff4c8";
+      ctx.beginPath();
+      ctx.moveTo(r * 0.45, 8);
+      ctx.lineTo(r * 1.25, 11);
+      ctx.lineTo(r * 0.42, 15);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#c9a227";
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.2, -r * 0.85);
+      ctx.lineTo(0, -r * 1.25);
+      ctx.lineTo(r * 0.2, -r * 0.7);
+      ctx.closePath();
       ctx.fill();
     }
 
@@ -2203,6 +2532,21 @@
     drawWalls();
     for (let i = 0; i < obstacles.length; i++) drawObstacle(obstacles[i]);
     for (let i = 0; i < items.length; i++) drawItem(items[i]);
+    for (let i = 0; i < shots.length; i++) {
+      const sh = shots[i];
+      ctx.fillStyle = sh.kind === "fire" ? "#ff7a2a" : "#fff6c8";
+      ctx.beginPath();
+      ctx.ellipse(sh.x, sh.y, sh.kind === "fire" ? 8 : 6, sh.kind === "fire" ? 6 : 12, Math.atan2(sh.vy, sh.vx), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (let i = 0; i < shockwaves.length; i++) {
+      const w = shockwaves[i];
+      ctx.strokeStyle = "rgba(255, 140, 70," + Math.max(0, w.life * 2) + ")";
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     drawPlayer();
     drawParticles();
     if (moonlight > 0 && state === "playing") {
@@ -2365,7 +2709,7 @@
   for (let i = 0; i < charButtons.length; i++) {
     charButtons[i].addEventListener("click", function (e) {
       e.stopPropagation();
-      setSelectedChar(charButtons[i].getAttribute("data-char"));
+      handleCharSlotClick(charButtons[i].getAttribute("data-char"));
     });
   }
   for (let i = 0; i < modeButtons.length; i++) {

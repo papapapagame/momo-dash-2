@@ -501,6 +501,42 @@ body {
   box-shadow: 0 0 0 2px rgba(255, 240, 180, 0.55), 0 0 8px rgba(255, 160, 220, 0.65);
 }
 
+.char-swatch-yuzu {
+  background: radial-gradient(circle at 35% 30%, #ffffff, #f4f0e8 55%, #d8d0c8);
+  box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(210, 200, 190, 0.9);
+}
+
+.char-swatch-yuzu::before,
+.char-swatch-yuzu::after {
+  content: "";
+  position: absolute;
+  top: -5px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 8px solid #f4f0e8;
+}
+
+.char-swatch-yuzu::before {
+  left: 1px;
+}
+
+.char-swatch-yuzu::after {
+  right: 1px;
+}
+
+.char-swatch-hakase {
+  background: radial-gradient(circle at 35% 30%, #ffe9a0, #e8c040 55%, #b8860b);
+  border-radius: 8px 12px 5px 8px;
+  box-shadow: inset -2px -2px 0 rgba(120, 80, 10, 0.25), 0 0 6px rgba(232, 192, 64, 0.45);
+}
+
+.char-swatch-hama {
+  background: radial-gradient(circle at 35% 30%, #6a6a72, #2a2a30 55%, #121216);
+  box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.35), 0 0 0 2px #c45c20;
+}
+
 .char-name {
   line-height: 1.2;
 }
