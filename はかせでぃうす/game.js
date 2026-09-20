@@ -3,10 +3,12 @@
 
   const W = 960;
   const H = 540;
-  const APP_VERSION = "1.25";
+  const APP_VERSION = "1.27";
   const HAKASE_PLAYED_KEY = "momoDash2HakasePlayed";
   const MOMO_GAME_URL = "../index.html";
   const BEST_KEY = "hakaseDeusBest";
+  const BEST_NORMAL_KEY = "hakaseDeusBestNormal";
+  const BEST_CHEAT_KEY = "hakaseDeusBestCheat";
   const SFX_KEY = "hakaseDeusSfx";
   const PAD_MODE_KEY = "hakaseDeusPadMode";
   const PAD_SIZE_KEY = "hakaseDeusPadSize";
@@ -68,6 +70,7 @@
   const scoreEl = document.getElementById("score-value");
   const bestEl = document.getElementById("best-value");
   const titleBestEl = document.getElementById("title-best");
+  const titleBestCheatEl = document.getElementById("title-best-cheat");
   const stageEl = document.getElementById("stage-value");
   const livesRow = document.getElementById("lives-row");
   const livesBox = document.getElementById("lives-box");
@@ -95,7 +98,15 @@
 
   let state = "title";
   let score = 0;
-  let best = Number(localStorage.getItem(BEST_KEY) || 0);
+  let bestNormal = Number(localStorage.getItem(BEST_NORMAL_KEY));
+  if (!isFinite(bestNormal) || bestNormal < 0) bestNormal = 0;
+  if (localStorage.getItem(BEST_NORMAL_KEY) == null) {
+    const oldBest = Number(localStorage.getItem(BEST_KEY) || 0);
+    bestNormal = isFinite(oldBest) && oldBest > 0 ? oldBest : 0;
+    if (bestNormal > 0) localStorage.setItem(BEST_NORMAL_KEY, String(bestNormal));
+  }
+  let bestCheat = Number(localStorage.getItem(BEST_CHEAT_KEY) || 0);
+  if (!isFinite(bestCheat) || bestCheat < 0) bestCheat = 0;
   let sfxOn = localStorage.getItem(SFX_KEY) !== "0";
   let lives = MAX_LIVES;
   let controlMode = localStorage.getItem(PAD_MODE_KEY) === "dpad" ? "dpad" : "stick";
@@ -114,6 +125,8 @@
   let bgmSrc = "";
   let bgmFade = 0;
   let bgmFadeMax = 1;
+  let bgmRetryT = 0;
+  const bgmPool = {};
   let bossWarn = null;
   let bossTheme = false;
   let extraIntro = null;
@@ -404,8 +417,8 @@
 
   function wantedBgm() {
     if (state !== "playing" || !sfxOn) return "";
-    if (bossWarn || extraIntro) return "";
     if (extraMode) return "audio/extra.mp3";
+    if (bossWarn) return "";
     const kind = boss && boss.kind;
     if (kind === "final" || (bossTheme && stage === 4)) return "audio/finalboss.mp3";
     if (bossTheme || boss) return "audio/boss.mp3";
@@ -414,6 +427,33 @@
     if (stage === 3) return "audio/stage3.mp3";
     if (stage === 4) return "audio/stage4.mp3";
     return "";
+  }
+
+  function bindBgmLoop(audio) {
+    if (!audio || audio._loopBound) return;
+    audio._loopBound = true;
+    audio.loop = true;
+    audio.addEventListener("ended", function () {
+      restartBgmEl(audio);
+    });
+  }
+
+  function restartBgmEl(audio) {
+    if (!audio || audio !== bgm) return;
+    audio.loop = true;
+    try { audio.currentTime = 0; } catch (err) {}
+    const play = audio.play();
+    if (play && play.catch) play.catch(function () {});
+  }
+
+  function makeBgm(src) {
+    if (bgmPool[src]) return bgmPool[src];
+    const audio = new Audio(src);
+    audio.preload = "auto";
+    audio.loop = true;
+    bindBgmLoop(audio);
+    bgmPool[src] = audio;
+    return audio;
   }
 
   function stopBgm() {
@@ -442,27 +482,53 @@
       const u = Math.max(0, bgmFade / bgmFadeMax);
       bgm.volume = BGM_VOL * u * u;
     }
-    if (bgmFade <= 0) stopBgm();
+    if (bgmFade <= 0) {
+      bgmFade = 0;
+      if (bgm) {
+        bgm.pause();
+        try { bgm.currentTime = 0; } catch (err) {}
+      }
+      bgm = null;
+      bgmSrc = "";
+      syncBgm();
+    }
   }
 
   function syncBgm() {
-    if (bgmFade > 0 || bossWarn || extraIntro) return;
+    if (bgmFade > 0 || bossWarn) return;
     const src = wantedBgm();
     if (!src) {
       stopBgm();
       return;
     }
     if (!bgm || bgmSrc !== src) {
-      stopBgm();
-      bgm = new Audio(src);
-      bgm.loop = true;
-      bgm.volume = BGM_VOL;
+      if (bgm) {
+        bgm.pause();
+        try { bgm.currentTime = 0; } catch (err) {}
+      }
+      bgm = makeBgm(src);
       bgmSrc = src;
-    } else {
-      bgm.volume = BGM_VOL;
+    }
+    bgm.loop = true;
+    bgm.volume = BGM_VOL;
+    if (bgm.ended) {
+      try { bgm.currentTime = 0; } catch (err) {}
     }
     const play = bgm.play();
     if (play && play.catch) play.catch(function () {});
+  }
+
+  function keepBgmAlive(dt) {
+    if (state !== "playing" || paused || !sfxOn) return;
+    if (bgmFade > 0 || bossWarn) return;
+    const src = wantedBgm();
+    if (!src) return;
+    bgmRetryT -= dt;
+    const dead = !bgm || bgmSrc !== src || bgm.paused || bgm.ended;
+    if (!dead) return;
+    if (bgmRetryT > 0) return;
+    bgmRetryT = 0.8;
+    syncBgm();
   }
 
   function startBossWarning(kind) {
@@ -476,7 +542,8 @@
 
   function startExtraIntro() {
     extraIntro = { t: BOSS_WARN_DUR, maxT: BOSS_WARN_DUR };
-    fadeBgmOut(BGM_FADE_DUR);
+    if (bgm) fadeBgmOut(BGM_FADE_DUR);
+    else syncBgm();
     flash = 0.28;
   }
 
@@ -1145,20 +1212,37 @@
     updateBombUi();
     resultTitle.textContent = win ? (easyMode ? "イージークリア！" : "ステージクリア！") : "ゲームオーバー";
     finalScoreEl.textContent = String(score);
-    const isBest = score > best;
-    if (isBest) {
-      best = score;
-      localStorage.setItem(BEST_KEY, String(best));
-      bestEl.textContent = String(best);
-      titleBestEl.textContent = String(best);
+    const recordable = !debugMode && !easyMode;
+    let isBest = false;
+    if (recordable && cheatUsed) {
+      if (score > bestCheat) {
+        bestCheat = score;
+        localStorage.setItem(BEST_CHEAT_KEY, String(bestCheat));
+        isBest = true;
+      }
+    } else if (recordable) {
+      if (score > bestNormal) {
+        bestNormal = score;
+        localStorage.setItem(BEST_NORMAL_KEY, String(bestNormal));
+        isBest = true;
+      }
     }
+    renderBestScores();
     newBestEl.classList.toggle("hidden", !isBest);
     syncBgm();
   }
 
+  function renderBestScores() {
+    const normal = Math.max(0, bestNormal | 0);
+    const cheat = Math.max(0, bestCheat | 0);
+    if (bestEl) bestEl.textContent = normal + "  (" + cheat + ")";
+    if (titleBestEl) titleBestEl.textContent = String(normal);
+    if (titleBestCheatEl) titleBestCheatEl.textContent = String(cheat);
+  }
+
   function updateHud() {
     scoreEl.textContent = String(score);
-    bestEl.textContent = String(best);
+    renderBestScores();
     livesRow.innerHTML = "";
     const n = Math.max(0, lives);
     for (let i = 0; i < n; i++) {
@@ -1312,6 +1396,7 @@
     if (player.invuln > 0) player.invuln -= dt;
     if (bannerT > 0) bannerT -= dt;
     updateBgmFade(dt);
+    keepBgmAlive(dt);
     updateBossWarn(dt);
     updateExtraIntro(dt);
     if (extraNextT > 0) {
@@ -2454,7 +2539,6 @@
     versionElTap.addEventListener("pointerdown", onVersionTap);
     versionElTap.addEventListener("touchstart", onVersionTap, { passive: false });
   }
-  bestEl.textContent = String(best);
-  titleBestEl.textContent = String(best);
+  renderBestScores();
   requestAnimationFrame(loop);
 })();

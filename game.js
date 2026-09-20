@@ -3,7 +3,7 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.17";
+  const APP_VERSION = "2.18";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
