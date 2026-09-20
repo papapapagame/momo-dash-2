@@ -9,6 +9,9 @@
   const BEST_KEY = "hakaseDeusBest";
   const BEST_NORMAL_KEY = "hakaseDeusBestNormal";
   const BEST_CHEAT_KEY = "hakaseDeusBestCheat";
+  const BEST_NORMAL_AT_KEY = "hakaseDeusBestNormalAt";
+  const BEST_CHEAT_AT_KEY = "hakaseDeusBestCheatAt";
+  const SCORE_WIPE_KEY = "momoDash2ScoreWipe1";
   const SFX_KEY = "hakaseDeusSfx";
   const PAD_MODE_KEY = "hakaseDeusPadMode";
   const PAD_SIZE_KEY = "hakaseDeusPadSize";
@@ -96,6 +99,17 @@
   const bombCountEl = document.getElementById("bomb-count");
   const powerSlots = Array.prototype.slice.call(document.querySelectorAll(".power-slot"));
 
+  if (localStorage.getItem(SCORE_WIPE_KEY) !== "1") {
+    localStorage.removeItem(BEST_KEY);
+    localStorage.removeItem(BEST_NORMAL_KEY);
+    localStorage.removeItem(BEST_CHEAT_KEY);
+    localStorage.removeItem(BEST_NORMAL_AT_KEY);
+    localStorage.removeItem(BEST_CHEAT_AT_KEY);
+    localStorage.removeItem("momoDash2Best");
+    localStorage.removeItem("momoDash2Records");
+    localStorage.setItem(SCORE_WIPE_KEY, "1");
+  }
+
   let state = "title";
   let score = 0;
   let bestNormal = Number(localStorage.getItem(BEST_NORMAL_KEY));
@@ -107,6 +121,10 @@
   }
   let bestCheat = Number(localStorage.getItem(BEST_CHEAT_KEY) || 0);
   if (!isFinite(bestCheat) || bestCheat < 0) bestCheat = 0;
+  let bestNormalAt = Number(localStorage.getItem(BEST_NORMAL_AT_KEY) || 0);
+  if (!isFinite(bestNormalAt) || bestNormalAt < 0) bestNormalAt = 0;
+  let bestCheatAt = Number(localStorage.getItem(BEST_CHEAT_AT_KEY) || 0);
+  if (!isFinite(bestCheatAt) || bestCheatAt < 0) bestCheatAt = 0;
   let sfxOn = localStorage.getItem(SFX_KEY) !== "0";
   let lives = MAX_LIVES;
   let controlMode = localStorage.getItem(PAD_MODE_KEY) === "dpad" ? "dpad" : "stick";
@@ -1217,13 +1235,17 @@
     if (recordable && cheatUsed) {
       if (score > bestCheat) {
         bestCheat = score;
+        bestCheatAt = Date.now();
         localStorage.setItem(BEST_CHEAT_KEY, String(bestCheat));
+        localStorage.setItem(BEST_CHEAT_AT_KEY, String(bestCheatAt));
         isBest = true;
       }
     } else if (recordable) {
       if (score > bestNormal) {
         bestNormal = score;
+        bestNormalAt = Date.now();
         localStorage.setItem(BEST_NORMAL_KEY, String(bestNormal));
+        localStorage.setItem(BEST_NORMAL_AT_KEY, String(bestNormalAt));
         isBest = true;
       }
     }
@@ -1232,12 +1254,24 @@
     syncBgm();
   }
 
+  function formatScoreAt(at) {
+    if (!at) return "";
+    const d = new Date(at);
+    if (isNaN(d.getTime())) return "";
+    const p = function (n) { return n < 10 ? "0" + n : String(n); };
+    return d.getFullYear() + "/" + p(d.getMonth() + 1) + "/" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+
   function renderBestScores() {
     const normal = Math.max(0, bestNormal | 0);
     const cheat = Math.max(0, bestCheat | 0);
     if (bestEl) bestEl.textContent = normal + "  (" + cheat + ")";
     if (titleBestEl) titleBestEl.textContent = String(normal);
     if (titleBestCheatEl) titleBestCheatEl.textContent = String(cheat);
+    const atEl = document.getElementById("title-best-at");
+    const cheatAtEl = document.getElementById("title-best-cheat-at");
+    if (atEl) atEl.textContent = formatScoreAt(bestNormalAt);
+    if (cheatAtEl) cheatAtEl.textContent = formatScoreAt(bestCheatAt);
   }
 
   function updateHud() {

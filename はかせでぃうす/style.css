@@ -570,6 +570,24 @@ body {
   color: #6a6080;
 }
 
+.best-ats {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 2px;
+  min-height: 1em;
+}
+
+.score-at {
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.55;
+}
+
+.score-at:empty {
+  display: none;
+}
+
 .best-line {
   font-size: 14px;
   font-weight: 800;

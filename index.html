@@ -41,6 +41,7 @@
         <div class="hud-best">
           <span class="hud-label">ベスト</span>
           <span id="best-value">0</span>
+          <span id="best-at" class="score-at"></span>
         </div>
       </div>
     </div>
@@ -65,16 +66,19 @@
           <div class="mode-record">
             <span class="mode-record-label">EASY</span>
             <span class="mode-record-score" id="record-easy-score">0</span>
+            <span class="score-at" id="record-easy-at"></span>
             <span class="record-char char-swatch" id="record-easy-char" aria-hidden="true"></span>
           </div>
           <div class="mode-record">
             <span class="mode-record-label">NORMAL</span>
             <span class="mode-record-score" id="record-normal-score">0</span>
+            <span class="score-at" id="record-normal-at"></span>
             <span class="record-char char-swatch" id="record-normal-char" aria-hidden="true"></span>
           </div>
           <div class="mode-record">
             <span class="mode-record-label">HARD</span>
             <span class="mode-record-score" id="record-hard-score">0</span>
+            <span class="score-at" id="record-hard-at"></span>
             <span class="record-char char-swatch" id="record-hard-char" aria-hidden="true"></span>
           </div>
         </div>
@@ -112,9 +116,18 @@
           </div>
           <p id="char-desc" class="char-desc"></p>
           <div id="char-records" class="char-records">
-            <span>EASY <b id="char-best-easy">0</b></span>
-            <span>NORMAL <b id="char-best-normal">0</b></span>
-            <span>HARD <b id="char-best-hard">0</b></span>
+            <span class="char-record">
+              <span>EASY <b id="char-best-easy">0</b></span>
+              <small class="score-at" id="char-best-easy-at"></small>
+            </span>
+            <span class="char-record">
+              <span>NORMAL <b id="char-best-normal">0</b></span>
+              <small class="score-at" id="char-best-normal-at"></small>
+            </span>
+            <span class="char-record">
+              <span>HARD <b id="char-best-hard">0</b></span>
+              <small class="score-at" id="char-best-hard-at"></small>
+            </span>
           </div>
         </div>
         <div class="sound-settings">
@@ -146,7 +159,7 @@
         </div>
         <button id="btn-start" class="btn primary" type="button">スタート</button>
         <p class="hint">タップ / クリック / スペースでダッシュ</p>
-        <p class="version" id="app-version">Ver.2.18</p>
+        <p class="version" id="app-version">Ver.2.19</p>
       </div>
     </div>
 

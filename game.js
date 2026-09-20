@@ -3,7 +3,7 @@
 
   const W = 540;
   const H = 960;
-  const APP_VERSION = "2.18";
+  const APP_VERSION = "2.19";
   const WALL = 58;
   const PLAYER_Y = 660;
   const PLAYER_R = 24;
@@ -19,6 +19,7 @@
 
   const BEST_KEY = "momoDash2Best";
   const RECORDS_KEY = "momoDash2Records";
+  const SCORE_WIPE_KEY = "momoDash2ScoreWipe1";
   const MODE_KEY = "momoDash2Mode";
   const BGM_MODE_KEY = "momoDash2BgmMode";
   const SFX_KEY = "momoDash2Sfx";
@@ -167,6 +168,7 @@
   let debugMode = false;
   let debugTapCount = 0;
   let versionSwitchTaps = 0;
+  wipeScoresOnce();
   let records = loadRecords();
   let starUnlocked = localStorage.getItem(STAR_UNLOCK_KEY) === "1";
   let unlocks = {
@@ -260,12 +262,56 @@
     spinAngle: 0,
   };
 
+  function emptyCharModes() {
+    return {
+      easy: { score: 0, at: 0 },
+      normal: { score: 0, at: 0 },
+      hard: { score: 0, at: 0 },
+    };
+  }
+
   function emptyRecords() {
     const rec = {};
-    for (let i = 0; i < MODE_IDS.length; i++) rec[MODE_IDS[i]] = { score: 0, char: "" };
+    for (let i = 0; i < MODE_IDS.length; i++) rec[MODE_IDS[i]] = { score: 0, char: "", at: 0 };
     rec.chars = {};
-    for (let i = 0; i < CHAR_IDS.length; i++) rec.chars[CHAR_IDS[i]] = { easy: 0, normal: 0, hard: 0 };
+    for (let i = 0; i < CHAR_IDS.length; i++) rec.chars[CHAR_IDS[i]] = emptyCharModes();
     return rec;
+  }
+
+  function readScoreAt(value, fallbackAt) {
+    if (value && typeof value === "object") {
+      return { score: value.score || 0, at: value.at || 0 };
+    }
+    return { score: typeof value === "number" ? value : 0, at: fallbackAt || 0 };
+  }
+
+  function formatScoreAt(at) {
+    if (!at) return "";
+    const d = new Date(at);
+    if (isNaN(d.getTime())) return "";
+    const p = function (n) { return n < 10 ? "0" + n : String(n); };
+    return d.getFullYear() + "/" + p(d.getMonth() + 1) + "/" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+
+  function setScoreAtText(el, at) {
+    if (!el) return;
+    el.textContent = formatScoreAt(at);
+  }
+
+  function clearStoredScores() {
+    localStorage.removeItem(BEST_KEY);
+    localStorage.removeItem(RECORDS_KEY);
+    localStorage.removeItem("hakaseDeusBest");
+    localStorage.removeItem("hakaseDeusBestNormal");
+    localStorage.removeItem("hakaseDeusBestCheat");
+    localStorage.removeItem("hakaseDeusBestNormalAt");
+    localStorage.removeItem("hakaseDeusBestCheatAt");
+  }
+
+  function wipeScoresOnce() {
+    if (localStorage.getItem(SCORE_WIPE_KEY) === "1") return;
+    clearStoredScores();
+    localStorage.setItem(SCORE_WIPE_KEY, "1");
   }
 
   function loadRecords() {
@@ -277,19 +323,22 @@
       for (let i = 0; i < MODE_IDS.length; i++) {
         const m = MODE_IDS[i];
         if (parsed[m] && typeof parsed[m].score === "number") {
-          base[m] = { score: parsed[m].score, char: parsed[m].char || "" };
+          base[m] = {
+            score: parsed[m].score,
+            char: parsed[m].char || "",
+            at: parsed[m].at || 0,
+          };
         }
       }
       if (parsed.chars) {
         for (let i = 0; i < CHAR_IDS.length; i++) {
           const id = CHAR_IDS[i];
-          if (parsed.chars[id]) {
-            base.chars[id] = {
-              easy: parsed.chars[id].easy || 0,
-              normal: parsed.chars[id].normal || 0,
-              hard: parsed.chars[id].hard || 0,
-            };
-          }
+          if (!parsed.chars[id]) continue;
+          base.chars[id] = {
+            easy: readScoreAt(parsed.chars[id].easy),
+            normal: readScoreAt(parsed.chars[id].normal),
+            hard: readScoreAt(parsed.chars[id].hard),
+          };
         }
       }
       return base;
@@ -400,7 +449,13 @@
   function clearUserName() {
     userName = "";
     localStorage.removeItem(USER_KEY);
+    records = emptyRecords();
+    clearStoredScores();
+    saveRecords();
     syncUserNameUi();
+    syncModeRecordsUi();
+    syncCharRecordsUi();
+    syncBestDisplay();
   }
 
   function syncUserNameUi() {
@@ -458,6 +513,11 @@
       normal: document.getElementById("record-normal-score"),
       hard: document.getElementById("record-hard-score"),
     };
+    const ats = {
+      easy: document.getElementById("record-easy-at"),
+      normal: document.getElementById("record-normal-at"),
+      hard: document.getElementById("record-hard-at"),
+    };
     const icons = {
       easy: document.getElementById("record-easy-char"),
       normal: document.getElementById("record-normal-char"),
@@ -466,18 +526,25 @@
     for (let i = 0; i < MODE_IDS.length; i++) {
       const m = MODE_IDS[i];
       if (map[m]) map[m].textContent = String((records[m] && records[m].score) || 0);
+      setScoreAtText(ats[m], records[m] && records[m].at);
       applyRecordCharIcon(icons[m], records[m] && records[m].char);
     }
   }
 
   function syncCharRecordsUi() {
-    const rec = (records.chars && records.chars[selectedCharId]) || { easy: 0, normal: 0, hard: 0 };
+    const rec = (records.chars && records.chars[selectedCharId]) || emptyCharModes();
+    const easy = readScoreAt(rec.easy);
+    const normal = readScoreAt(rec.normal);
+    const hard = readScoreAt(rec.hard);
     const easyEl = document.getElementById("char-best-easy");
     const normalEl = document.getElementById("char-best-normal");
     const hardEl = document.getElementById("char-best-hard");
-    if (easyEl) easyEl.textContent = String(rec.easy || 0);
-    if (normalEl) normalEl.textContent = String(rec.normal || 0);
-    if (hardEl) hardEl.textContent = String(rec.hard || 0);
+    if (easyEl) easyEl.textContent = String(easy.score || 0);
+    if (normalEl) normalEl.textContent = String(normal.score || 0);
+    if (hardEl) hardEl.textContent = String(hard.score || 0);
+    setScoreAtText(document.getElementById("char-best-easy-at"), easy.at);
+    setScoreAtText(document.getElementById("char-best-normal-at"), normal.at);
+    setScoreAtText(document.getElementById("char-best-hard-at"), hard.at);
   }
 
   function displayIdForSlot(baseId) {
@@ -577,14 +644,16 @@
 
   function submitScore(finalScore) {
     let isNew = false;
-    const modeRec = records[selectedMode] || { score: 0, char: "" };
+    const now = Date.now();
+    const modeRec = records[selectedMode] || { score: 0, char: "", at: 0 };
     if (finalScore > (modeRec.score || 0)) {
-      records[selectedMode] = { score: finalScore, char: selectedCharId };
+      records[selectedMode] = { score: finalScore, char: selectedCharId, at: now };
       isNew = true;
     }
-    if (!records.chars[selectedCharId]) records.chars[selectedCharId] = { easy: 0, normal: 0, hard: 0 };
-    if (finalScore > (records.chars[selectedCharId][selectedMode] || 0)) {
-      records.chars[selectedCharId][selectedMode] = finalScore;
+    if (!records.chars[selectedCharId]) records.chars[selectedCharId] = emptyCharModes();
+    const charMode = readScoreAt(records.chars[selectedCharId][selectedMode]);
+    if (finalScore > (charMode.score || 0)) {
+      records.chars[selectedCharId][selectedMode] = { score: finalScore, at: now };
       isNew = true;
     }
     const oldBest = parseInt(localStorage.getItem(BEST_KEY) || "0", 10);
@@ -598,6 +667,7 @@
 
   function syncBestDisplay() {
     if (bestEl) bestEl.textContent = String(currentModeBest());
+    setScoreAtText(document.getElementById("best-at"), records[selectedMode] && records[selectedMode].at);
   }
 
   function syncSpeedDisplay() {
@@ -2756,7 +2826,7 @@
     btnDeleteUser.addEventListener("click", function (e) {
       e.stopPropagation();
       if (!userName) return;
-      if (window.confirm("本当に削除してもよろしいですか？")) clearUserName();
+      if (window.confirm("本当に削除してもよろしいですか？\n\nユーザー名と、ハイスコアの記録も削除されます。")) clearUserName();
     });
   }
   if (btnNameOk) {
